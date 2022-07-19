@@ -2,6 +2,10 @@
 	ESP32S2 DIG ADC example with DMA using SPI2.
 	
 	Based on examples found in the IDF.
+	
+	Note: There is something janky about SAR ADC (DIG) 1. 2 Seems fine.
+	also, I think this is sampling at 1msps/s.
+
 */
 #include <stdio.h>
 #include <string.h>
@@ -41,24 +45,24 @@ static lldesc_t dma2 = {0};
 #define SAR_SIMPLE_NUM  1024  // Set sample number of enabled unit.
 
 // Use two DMA linker to save ADC data. ADC sample 1 times -> 2 byte data -> 2 DMA link buf.
-#define SAR_DMA_DATA_SIZE(unit, sample_num)     (SAR_EOF_NUMBER(unit, sample_num))
-#define SAR_EOF_NUMBER(unit, sample_num)        ((sample_num) * (unit))
-#define SAR_MEAS_LIMIT_NUM(unit, sample_num)    (SAR_SIMPLE_NUM)
+#define SAR_DMA_DATA_SIZE(unit, sample_num)	 	(SAR_EOF_NUMBER(unit, sample_num))
+#define SAR_EOF_NUMBER(unit, sample_num)		((sample_num) * (unit))
+#define SAR_MEAS_LIMIT_NUM(unit, sample_num)	(SAR_SIMPLE_NUM)
 #define SAR_SIMPLE_TIMEOUT_MS  1000
 
 
 typedef struct adc_dac_dma_isr_handler_ {
-    uint32_t mask;
-    intr_handler_t handler;
-    void* handler_arg;
-    SLIST_ENTRY(adc_dac_dma_isr_handler_) next;
+	uint32_t mask;
+	intr_handler_t handler;
+	void* handler_arg;
+	SLIST_ENTRY(adc_dac_dma_isr_handler_) next;
 } adc_dac_dma_isr_handler_t;
 
 
 typedef struct dma_msg {
-    uint32_t int_msk;
-    uint8_t *data;
-    uint32_t data_len;
+	uint32_t int_msk;
+	uint8_t *data;
+	uint32_t data_len;
 } adc_dma_event_t;
 
 static uint16_t link_buf[2][SAR_DMA_DATA_SIZE(1, SAR_SIMPLE_NUM)] = {0};
@@ -69,54 +73,54 @@ int inttest1, inttest2;
 /** ADC-DMA ISR handler. */
 static IRAM_ATTR void adc_dma_isr(void *arg)
 {
-    uint32_t int_st = REG_READ(SPI_DMA_INT_ST_REG(3));
-    int task_awoken = pdFALSE;
-    REG_WRITE(SPI_DMA_INT_CLR_REG(3), int_st);
-    if (int_st & SPI_IN_SUC_EOF_INT_ST_M) {
+	uint32_t int_st = REG_READ(SPI_DMA_INT_ST_REG(3));
+	int task_awoken = pdFALSE;
+	REG_WRITE(SPI_DMA_INT_CLR_REG(3), int_st);
+	if (int_st & SPI_IN_SUC_EOF_INT_ST_M) {
 		inttest1++;
-    }
-    if (int_st & SPI_IN_DONE_INT_ST) {
+	}
+	if (int_st & SPI_IN_DONE_INT_ST) {
 		inttest2++;
-    }
-    if (task_awoken == pdTRUE) {
-        portYIELD_FROM_ISR();
-    }
+	}
+	if (task_awoken == pdTRUE) {
+		portYIELD_FROM_ISR();
+	}
 }
 
 #define QDELAY { int i; for( i = 0; i < 30; i++ ) __asm__ __volatile__ ("nop\nnop\nnop\nnop\nnop"); }
 
 void app_main(void)
 {
-    printf("Hello world!\n");
+	printf("Hello world!\n");
 
-    /* Print chip information */
-    esp_chip_info_t chip_info;
-    esp_chip_info(&chip_info);
-    printf("This is %s chip with %d CPU core(s), WiFi%s%s, ",
-            CONFIG_IDF_TARGET,
-            chip_info.cores,
-            (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-            (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
+	/* Print chip information */
+	esp_chip_info_t chip_info;
+	esp_chip_info(&chip_info);
+	printf("This is %s chip with %d CPU core(s), WiFi%s%s, ",
+			CONFIG_IDF_TARGET,
+			chip_info.cores,
+			(chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
+			(chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
 
-    printf("silicon revision %d, ", chip_info.revision);
+	printf("silicon revision %d, ", chip_info.revision);
 
-    printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+	printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
+			(chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
-    printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
+	printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
 
 	// I think you can mess with this somehow to do temperature sensing.
 	// doing the REGI2C_WRITE_MASK calls in the middle seems to wreck things up.
-    REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENCAL_REF_ADDR, 0);
-    REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_TSENS_ADDR, 0);
-    REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_RTC_ADDR, 0);
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENCAL_REF_ADDR, 0);
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_TSENS_ADDR, 0);
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_RTC_ADDR, 0);
 
 
 	{
 		// ADC
 		// ADC1_0 is RTC_GPIO1 or GPIO1.
-	    gpio_config_t io_conf = { .mode=GPIO_MODE_DISABLE, .pin_bit_mask=(1ULL<<GPIO_NUM_6) };
-	    ESP_ERROR_CHECK(gpio_config(&io_conf));
+		gpio_config_t io_conf = { .mode=GPIO_MODE_DISABLE, .pin_bit_mask=(1ULL<<GPIO_NUM_6) };
+		ESP_ERROR_CHECK(gpio_config(&io_conf));
 		rtc_gpio_init( GPIO_NUM_6 );
 	}
 
@@ -125,8 +129,8 @@ void app_main(void)
 	DPORT_REG_WRITE( RTC_IO_TOUCH_PAD6_REG, RTC_IO_TOUCH_PAD1_FUN_IE | RTC_IO_TOUCH_PAD1_SLP_IE );
 	
    // Enable 8M clock source for RNG (this is actually enough to produce strong random results,
-    // but enabling the SAR ADC as well adds some insurance.)
-    REG_SET_BIT(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_EN);
+	// but enabling the SAR ADC as well adds some insurance.)
+	REG_SET_BIT(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_EN);
 	REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_DIV_SEL, 0 ); // Disable divisor on CK8M (TODO) TODO TODO Seems to have no impact.
 	REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_FAST_CLK_RTC_SEL, 0 ); // Use 10MHz signal.
 
@@ -189,19 +193,19 @@ void app_main(void)
 	//Not sure why I need to double set?
 	REG_SET_BIT( SENS_SAR_MEAS1_CTRL1_REG, SENS_RTC_CLKGATE_EN );
 	REG_SET_BIT( SENS_SAR_MEAS1_CTRL1_REG, SENS_RTC_CLKGATE_EN );
-//    SENS.sar_meas1_ctrl1.rtc_saradc_clkgate_en = 1;
-//    SENS.sar_power_xpd_sar.force_xpd_sar = SENS_FORCE_XPD_SAR_PU;
+//	SENS.sar_meas1_ctrl1.rtc_saradc_clkgate_en = 1;
+//	SENS.sar_power_xpd_sar.force_xpd_sar = SENS_FORCE_XPD_SAR_PU;
 	REG_SET_FIELD( SENS_SAR_POWER_XPD_SAR_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_PU );
 	REG_SET_FIELD( SENS_SAR_POWER_XPD_SAR_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_PU );
 
 
-    // Enable SAR ADC to read a disconnected input for additional entropy
-    SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN0_REG,DPORT_APB_SARADC_CLK_EN);
+	// Enable SAR ADC to read a disconnected input for additional entropy
+	SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN0_REG,DPORT_APB_SARADC_CLK_EN);
 
 		
 	// Make APLL 125MHz (the highest it can safely be)
-    REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0 );
-    REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1 );
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0 );
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1 );
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, 8);
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, 0);
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, 128);
@@ -210,7 +214,7 @@ void app_main(void)
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, 0);
 
 	// Clock source: 1) APLL, 2) APB_CLK
-    REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLK_SEL, 1);
+	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLK_SEL, 1);
 	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_NUM, 0);
 	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_B, 0);
 	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_A, 0);
@@ -224,11 +228,11 @@ void app_main(void)
 	REG_SET_FIELD(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD, 0xff );
 	SET_PERI_REG_MASK(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD_FORCE );
 
-    REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR1_PATT_LEN, 0);
-    WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x53ffffff);    // set adc1 channel & bitwidth & atten  
+	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR1_PATT_LEN, 0);
+	WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x53ffffff);	// set adc1 channel & bitwidth & atten  
 
-    REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR2_PATT_LEN, 0);
-    WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
+	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR2_PATT_LEN, 0);
+	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
 
 	// Set this to 1 for double-channel mode or 2 for alternate-scan mode.
 	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_WORK_MODE, 1);
@@ -262,12 +266,12 @@ void app_main(void)
 	WRITE_PERI_REG( APB_SARADC_FILTER_CTRL_REG, 0 ); // Disable filters
 	portENABLE_INTERRUPTS();
 
-    for (int i = 1000; i >= 0; i--)
+	for (int i = 1000; i >= 0; i--)
 	{
-        printf("Restarting in %d seconds... %08x %08x %04x %04x %04x %04x %d %d\n", i, READ_PERI_REG(SENS_SAR_MEAS1_CTRL2_REG), READ_PERI_REG( APB_SARADC_CTRL_REG ), link_buf[0][0], link_buf[0][1], link_buf[0][2], link_buf[0][3], inttest1, inttest2 );
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-    printf("Restarting now.\n");
-    fflush(stdout);
-    esp_restart();
+		printf("Restarting in %d seconds... %08x %08x %04x %04x %04x %04x %d %d\n", i, READ_PERI_REG(SENS_SAR_MEAS1_CTRL2_REG), READ_PERI_REG( APB_SARADC_CTRL_REG ), link_buf[0][0], link_buf[0][1], link_buf[0][2], link_buf[0][3], inttest1, inttest2 );
+		vTaskDelay(1000 / portTICK_PERIOD_MS);
+	}
+	printf("Restarting now.\n");
+	fflush(stdout);
+	esp_restart();
 }
