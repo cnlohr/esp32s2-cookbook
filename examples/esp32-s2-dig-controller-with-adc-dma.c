@@ -234,12 +234,17 @@ void app_main(void)
 	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR2_PATT_LEN, 0);
 	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
 
-	// Set this to 1 for double-channel mode or 2 for alternate-scan mode.
+	// Set this to 1 for double-channel mode or 2 for alternate-scan mode. (0 for single-channel)
 	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_WORK_MODE, 1);
 	//XXX For some reason SAR1 is much slower than SAR2?  Or something about SAR1 breaks a lot.
 	// Recommend using SAR2 for boundary tests.
 	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR_SEL, 1 ); 
 	CLEAR_PERI_REG_MASK(APB_SARADC_CTRL2_REG, APB_SARADC_MEAS_NUM_LIMIT);
+	
+	// Try 11-bit encoding.  This should set the ADC to Type II DMA Output
+	// which tags each 16-bit sample with which ADC and channel it was reading from.
+	SET_PERI_REG_MASK( APB_SARADC_CTRL_REG, APB_SARADC_DATA_SAR_SEL );
+	
 
 	// Configure DIG ADC CTRL for SPI DMA
 	REG_SET_FIELD(APB_SARADC_DMA_CONF_REG, APB_SARADC_APB_ADC_EOF_NUM, sizeof(link_buf[0])/sizeof(link_buf[0][0]) );
