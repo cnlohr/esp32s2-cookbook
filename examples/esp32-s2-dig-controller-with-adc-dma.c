@@ -5,6 +5,10 @@
 	
 	Note: There is something janky about SAR ADC (DIG) 1. 2 Seems fine.
 	also, I think this is sampling at 1msps/s.
+	
+	This demo samples at approximately 1.4 MHz, one channel on one SAR.
+	
+	It also shows how you can use dual mode.
 
 */
 #include <stdio.h>
@@ -50,26 +54,12 @@ static lldesc_t dma2 = {0};
 #define SAR_MEAS_LIMIT_NUM(unit, sample_num)	(SAR_SIMPLE_NUM)
 #define SAR_SIMPLE_TIMEOUT_MS  1000
 
-
-typedef struct adc_dac_dma_isr_handler_ {
-	uint32_t mask;
-	intr_handler_t handler;
-	void* handler_arg;
-	SLIST_ENTRY(adc_dac_dma_isr_handler_) next;
-} adc_dac_dma_isr_handler_t;
-
-
-typedef struct dma_msg {
-	uint32_t int_msk;
-	uint8_t *data;
-	uint32_t data_len;
-} adc_dma_event_t;
-
 static uint16_t link_buf[2][SAR_DMA_DATA_SIZE(1, SAR_SIMPLE_NUM)] = {0};
-
+static uint16_t safe_buf[SAR_DMA_DATA_SIZE(1, SAR_SIMPLE_NUM)];
 intr_handle_t adc_dma_isr_handle;
  
 int inttest1, inttest2;
+int readok = 0;
 /** ADC-DMA ISR handler. */
 static IRAM_ATTR void adc_dma_isr(void *arg)
 {
@@ -77,10 +67,26 @@ static IRAM_ATTR void adc_dma_isr(void *arg)
 	int task_awoken = pdFALSE;
 	REG_WRITE(SPI_DMA_INT_CLR_REG(3), int_st);
 	if (int_st & SPI_IN_SUC_EOF_INT_ST_M) {
+		if( dma1.owner == 0 )
+		{
+			if( readok == 0 )
+			{
+				memcpy( safe_buf, link_buf[0], sizeof( safe_buf ) );
+				readok = 1;
+			}
+			memset( link_buf[0], 0, sizeof( link_buf[0] ) );
+			dma1.owner = 1;
+			inttest2++;
+		}
+		if( dma2.owner == 0 )
+		{
+			memset( link_buf[1], 0, sizeof( link_buf[1] ) );
+			dma2.owner = 1;
+		}
 		inttest1++;
 	}
 	if (int_st & SPI_IN_DONE_INT_ST) {
-		inttest2++;
+		// Not used.  We want to read for forever.
 	}
 	if (task_awoken == pdTRUE) {
 		portYIELD_FROM_ISR();
@@ -89,9 +95,197 @@ static IRAM_ATTR void adc_dma_isr(void *arg)
 
 #define QDELAY { int i; for( i = 0; i < 30; i++ ) __asm__ __volatile__ ("nop\nnop\nnop\nnop\nnop"); }
 
+void IRAM_ATTR __attribute__((noinline)) setup_sar()
+{
+
+	// Just FYI - it seems there is no need for GPIO configuration.
+
+	// This is absolutely rquired.
+	// I don't fully understand why, but things have a BAD DAY if you don't have this.
+	portDISABLE_INTERRUPTS();
+
+
+	// Configure the SPI3 DMA
+	{
+		uint32_t int_mask = SPI_IN_SUC_EOF_INT_ENA;
+		uint32_t dma_addr = (uint32_t)&dma1;
+
+		dma1 = (lldesc_t) {
+			.size = sizeof(link_buf[0]),
+			.owner = 1,
+			.buf = (uint8_t*)&link_buf[0][0],
+			.qe.stqe_next = &dma2,
+		};
+		dma2 = (lldesc_t) {
+			.size = sizeof(link_buf[1]),
+			.owner = 1,
+			.buf = (uint8_t*)&link_buf[1][0],
+			.qe.stqe_next = &dma1,
+		};
+		REG_WRITE(SPI_DMA_INT_ENA_REG(3), 0);
+		REG_WRITE(SPI_DMA_INT_CLR_REG(3), UINT32_MAX);
+		esp_intr_alloc(ETS_SPI3_DMA_INTR_SOURCE, 0, &adc_dma_isr, NULL, &adc_dma_isr_handle );
+
+		REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
+		REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_DMA_RST_M);
+		REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_RST_M);
+		REG_WRITE(SPI_DMA_INT_CLR_REG(3), 0xFFFFFFFF); 
+
+		REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_APB_SARADC_CLK_EN_M);
+		REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_SPI3_DMA_CLK_EN_M);
+		REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_SPI3_CLK_EN);
+		REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_DMA_RST_M);
+		REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_RST_M);
+		REG_WRITE(SPI_DMA_INT_CLR_REG(3), 0xFFFFFFFF);
+		REG_WRITE(SPI_DMA_INT_ENA_REG(3), int_mask | REG_READ(SPI_DMA_INT_ENA_REG(3)));
+
+		// Not sure why, but you *must* preserve this order.  That includes
+		// stopping and starting, twice.
+		REG_SET_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
+		REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_START);
+		SET_PERI_REG_BITS(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_ADDR, (uint32_t)dma_addr, 0);
+		REG_SET_BIT(SPI_DMA_CONF_REG(3), SPI_IN_RST);
+		REG_CLR_BIT(SPI_DMA_CONF_REG(3), SPI_IN_RST);
+		REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
+		REG_SET_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_START);
+	}
+
+	//Reset module.
+	CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_SAR_I2C_FORCE_PD_M); 
+	SET_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_SAR_I2C_FORCE_PU_M);   
+
+	// I think you can mess with this somehow to do temperature sensing.
+	// doing the REGI2C_WRITE_MASK calls in the middle seems to wreck things up.
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENCAL_REF_ADDR, 0);
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_TSENS_ADDR, 0);
+	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_RTC_ADDR, 0);
+
+	// This appears to be some sort of undocumented register?
+	// It seems to force the SAR to power up.
+	WRITE_PERI_REG( SENS_SAR_POWER_XPD_SAR_REG,
+		SENS_FORCE_XPD_SAR_S<<SENS_FORCE_XPD_SAR_PU );
+
+	// Enable SAR ADC
+	SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN0_REG,DPORT_APB_SARADC_CLK_EN);
+
+	{
+		// Note APLL max safe frequency is 125MHz It seems 
+		// That the APLL (silicon-depdent) can go up to 160MHz.
+		
+		// APLL_FREQ = XTAL * ( sdm2 + sdm1/256 + sdm0/65536 + 4 ) / (2*(odiv+2))
+		const int sdm2 = 8;
+		const int sdm1 = 128;
+		const int sdm0 = 0;
+		const int odiv = 0;
+		REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0 );
+		REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1 );
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, sdm0);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_1);
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_2_REV1);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, odiv);
+	}
+
+		
+	WRITE_PERI_REG( APB_SARADC_FILTER_CTRL_REG, 0 ); // Disable filters	
+
+	const int clock_select_source = 1; // Clock source: 1) APLL, 2) APB_CLK (80MHz)
+	
+	// Setup SAR clocking.  
+	// Clock Output = (clkm_div + 1 + clkm_div_a/clkm_div_b) * Clock
+	// Note: Cranking this seems to degrade quality.  It's like this doesn't
+	// control the SAR frequency, but rather the sampling-of-the-sar frequency
+	// a lot like sar_clk_div, quality-wise.
+	const int clkm_div = 0;
+	const int clkm_div_b = 1;
+	const int clkm_div_a = 0;
+
+	// number of adc cycles to wait before SPI DMA reads value.
+	// more experimentation is needed but the "correct" value for this is
+	// between 15 and 20? There is some sort of gating here. if sar_clk_div == 1
+	// TODO: Much more research is needed on this.
+	// if sar_clk_div = 4, timer_target = 48
+	// if sar_clk_div = 2, timer_target = 28
+	// BIG TODO: This should be much more closely investigated!!!! XXX
+	const int timer_target = 48;
+	
+	// This seems to have an impact on how fast the SAR samples.  This does not
+	// impact the output frame rate that the SPI DMA reads at, but it does impact
+	// how quickly that datais ready.  Setting it to 1 makes the results
+	// noticably more chunky.  I think 4 is the "right" value for full depth.
+	// 0 gives us 7? bits?
+	//
+	// Reducing this value lets you tighten up timer_target
+	const int sar_clk_div = 4; // default is 4. (0 is invalid)
+
+	// Work modes:
+	// 0: Single-ADC mode.
+	// 1: Double-mode (sync) mode.
+	// 2: Alternating mode.
+	const int work_mode = 0;
+	const int sar_sel = 1; //primary SAR.
+
+	WRITE_PERI_REG( APB_SARADC_APB_ADC_CLKM_CONF_REG,
+		clock_select_source<<APB_SARADC_CLK_SEL_S | 	
+		clkm_div<<APB_SARADC_CLKM_DIV_NUM_S |
+		clkm_div_b<<APB_SARADC_CLKM_DIV_B_S |
+		clkm_div_a<<APB_SARADC_CLKM_DIV_A_S );
+
+	WRITE_PERI_REG( APB_SARADC_CTRL2_REG,
+		timer_target<<APB_SARADC_TIMER_TARGET_S | //XXX TODO EXPERIMENT
+		0<<APB_SARADC_MEAS_NUM_LIMIT_S |
+		1<<APB_SARADC_TIMER_SEL_S | // "Reserved" in datasheet.
+		0<<APB_SARADC_TIMER_EN_S // Will be enabled later.
+		);
+
+	WRITE_PERI_REG( APB_SARADC_CTRL_REG,
+		sar_clk_div<<APB_SARADC_SAR_CLK_DIV_S | // default is 4. 0 is invalid.
+		1<<APB_SARADC_SAR_CLK_GATED_S | // I don't know what this does.
+		0<<APB_SARADC_SAR1_PATT_LEN_S | // Pattern length = 1 (0+1) = 1
+		0<<APB_SARADC_SAR2_PATT_LEN_S | // Pattern length = 1 (0+1) = 1
+		work_mode<<APB_SARADC_WORK_MODE_S | // Work mode = 2 ( 1 = double-channel mode, 0 for single channel)
+		sar_sel<<APB_SARADC_SAR_SEL_S | // Select SAR2 as the primary SAR. (Needs more experimentation)
+		1<<APB_SARADC_DATA_SAR_SEL_S | // Use 11-bit encoding (DMA Type II Data so we get IDs of which SAR is which )
+		0<<APB_SARADC_START_FORCE_S // Unsure about this. Seems to need to be 0 to work at all.
+		);
+	
+	// I think this means our samplerate is 125 MHz / 1 [APB_SARADC_CLKM_DIV_NUM+1] / 60 [APB_SARADC_TIMER_TARGET / (4 [APB_SARADC_SAR_CLK_DIV]+1) = 520kSPS?
+	// Something is amiss.  I think our actual rate is twice that.
+
+	REG_SET_FIELD(SENS_SAR_MEAS1_CTRL2_REG, SENS_SAR1_EN_PAD, 0xff );
+	REG_SET_FIELD(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD, 0xff );
+	
+	WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x53ffffff);	// set adc1 channel & bitwidth & atten  
+	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
+
+	// GENERAL NOTE:
+	//	SENS_SAR_MEAS1_CTRL2_REG and SENS_SAR_MEAS1_CTRL2_REG should not be used
+	//	here because they are for the RTC.
+
+	// Configure DIG ADC CTRL for SPI DMA.
+	WRITE_PERI_REG( APB_SARADC_DMA_CONF_REG, 
+		1<<APB_SARADC_APB_ADC_TRANS_S |
+		(sizeof(link_buf[0])/sizeof(link_buf[0][0]))<<APB_SARADC_APB_ADC_EOF_NUM_S );
+
+	// Hmmm... Why does this seemingly impact SAR2?  Setting to 0 breaks SAR2.
+	// I don't actually understand this. But, doing the following two steps 
+	// seems to make it possible to actually run both SARs
+	// XXX I really don't understand this, but I really believe these two steps
+	// are crucial to doing dual SAR1+SAR2 mode reliably.
+	REG_WRITE( SENS_SAR_MEAS1_MUX_REG, SENS_SAR1_DIG_FORCE );
+	REG_WRITE( SENS_SAR_MEAS2_MUX_REG, 0x00000000 );
+
+	// Actually enable the SAR.
+	SET_PERI_REG_MASK(APB_SARADC_CTRL2_REG,APB_SARADC_TIMER_EN);
+
+	portENABLE_INTERRUPTS();
+
+}
+
 void app_main(void)
 {
-	printf("Hello world!\n");
+	printf("Hello world SAR DIG ADC + SPI3 DMA example!\n");
 
 	/* Print chip information */
 	esp_chip_info_t chip_info;
@@ -109,172 +303,31 @@ void app_main(void)
 
 	printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
 
-	// I think you can mess with this somehow to do temperature sensing.
-	// doing the REGI2C_WRITE_MASK calls in the middle seems to wreck things up.
-	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENCAL_REF_ADDR, 0);
-	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_TSENS_ADDR, 0);
-	REGI2C_WRITE_MASK(I2C_SAR_ADC, ADC_SARADC_ENT_RTC_ADDR, 0);
-
-
-	{
-		// ADC
-		// ADC1_0 is RTC_GPIO1 or GPIO1.
-		gpio_config_t io_conf = { .mode=GPIO_MODE_DISABLE, .pin_bit_mask=(1ULL<<GPIO_NUM_6) };
-		ESP_ERROR_CHECK(gpio_config(&io_conf));
-		rtc_gpio_init( GPIO_NUM_6 );
-	}
-
-	DPORT_REG_WRITE( GPIO_PIN_MUX_REG[6], FUN_IE | SLP_IE ); // Configure GPIO (disable IE, PUs, etc.)
-	DPORT_REG_WRITE( RTC_GPIO_OUT_W1TC_REG, (1<<(10+6)) );
-	DPORT_REG_WRITE( RTC_IO_TOUCH_PAD6_REG, RTC_IO_TOUCH_PAD1_FUN_IE | RTC_IO_TOUCH_PAD1_SLP_IE );
-	
-   // Enable 8M clock source for RNG (this is actually enough to produce strong random results,
-	// but enabling the SAR ADC as well adds some insurance.)
-	REG_SET_BIT(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_DIG_CLK8M_EN);
-	REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_DIV_SEL, 0 ); // Disable divisor on CK8M (TODO) TODO TODO Seems to have no impact.
-	REG_SET_FIELD(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_FAST_CLK_RTC_SEL, 0 ); // Use 10MHz signal.
-
-	// Configure the SPI3 DMA
-
-	uint32_t int_mask = SPI_IN_SUC_EOF_INT_ENA;
-	uint32_t dma_addr = (uint32_t)&dma1;
-
-	dma1 = (lldesc_t) {
-		.size = sizeof(link_buf[0]),
-		.owner = 1,
-		.buf = (uint8_t*)&link_buf[0][0],
-		.qe.stqe_next = &dma2,
-	};
-	dma2 = (lldesc_t) {
-		.size = sizeof(link_buf[1]),
-		.owner = 1,
-		.buf = (uint8_t*)&link_buf[1][0],
-		.qe.stqe_next = &dma1,
-	};
-	REG_WRITE(SPI_DMA_INT_ENA_REG(3), 0);
-	REG_WRITE(SPI_DMA_INT_CLR_REG(3), UINT32_MAX);
-	esp_intr_alloc(ETS_SPI3_DMA_INTR_SOURCE, 0, &adc_dma_isr, NULL, &adc_dma_isr_handle );
-
-	REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
-	REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_DMA_RST_M);
-	REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_RST_M);
-	REG_WRITE(SPI_DMA_INT_CLR_REG(3), 0xFFFFFFFF); 
-
-	REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_APB_SARADC_CLK_EN_M);
-	REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_SPI3_DMA_CLK_EN_M);
-	REG_SET_BIT(DPORT_PERIP_CLK_EN_REG, DPORT_SPI3_CLK_EN);
-	REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_DMA_RST_M);
-	REG_CLR_BIT(DPORT_PERIP_RST_EN_REG, DPORT_SPI3_RST_M);
-	REG_WRITE(SPI_DMA_INT_CLR_REG(3), 0xFFFFFFFF);
-	REG_WRITE(SPI_DMA_INT_ENA_REG(3), int_mask | REG_READ(SPI_DMA_INT_ENA_REG(3)));
-
-	// Not sure why, but you *must* preserve this order.  That includes
-	// stopping and starting, twice.
-	REG_SET_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
-	REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_START);
-	SET_PERI_REG_BITS(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_ADDR, (uint32_t)dma_addr, 0);
-	REG_SET_BIT(SPI_DMA_CONF_REG(3), SPI_IN_RST);
-	REG_CLR_BIT(SPI_DMA_CONF_REG(3), SPI_IN_RST);
-	REG_CLR_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_STOP);
-	REG_SET_BIT(SPI_DMA_IN_LINK_REG(3), SPI_INLINK_START);
-	REG_SET_BIT(SPI_DMA_CONF_REG(3), SPI_INLINK_AUTO_RET);
-
-
-	// This is absolutely rquired.
-	// I don't fully understand why, but things have a BAD DAY if you don't have this.
-	portDISABLE_INTERRUPTS();
-
-	//Reset module.
-	CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_SAR_I2C_FORCE_PD_M); 
-	SET_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_SAR_I2C_FORCE_PU_M);   
-
-	CLEAR_PERI_REG_MASK(APB_SARADC_CTRL2_REG,APB_SARADC_TIMER_EN);
-		
-	//Not sure why I need to double set?
-	REG_SET_BIT( SENS_SAR_MEAS1_CTRL1_REG, SENS_RTC_CLKGATE_EN );
-	REG_SET_BIT( SENS_SAR_MEAS1_CTRL1_REG, SENS_RTC_CLKGATE_EN );
-//	SENS.sar_meas1_ctrl1.rtc_saradc_clkgate_en = 1;
-//	SENS.sar_power_xpd_sar.force_xpd_sar = SENS_FORCE_XPD_SAR_PU;
-	REG_SET_FIELD( SENS_SAR_POWER_XPD_SAR_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_PU );
-	REG_SET_FIELD( SENS_SAR_POWER_XPD_SAR_REG, SENS_FORCE_XPD_SAR, SENS_FORCE_XPD_SAR_PU );
-
-
-	// Enable SAR ADC to read a disconnected input for additional entropy
-	SET_PERI_REG_MASK(DPORT_PERIP_CLK_EN0_REG,DPORT_APB_SARADC_CLK_EN);
-
-		
-	// Make APLL 125MHz (the highest it can safely be)
-	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0 );
-	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1 );
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, 8);
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, 0);
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, 128);
-	REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_1);
-	REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, APLL_SDM_STOP_VAL_2_REV1);
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, 0);
-
-	// Clock source: 1) APLL, 2) APB_CLK
-	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLK_SEL, 1);
-	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_NUM, 0);
-	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_B, 0);
-	REG_SET_FIELD(APB_SARADC_APB_ADC_CLKM_CONF_REG, APB_SARADC_CLKM_DIV_A, 0);
-	REG_SET_FIELD(APB_SARADC_CTRL2_REG, APB_SARADC_TIMER_TARGET, 60);
-	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR_CLK_DIV, 4 ); // default is 4.
-
-	// I think this means our samplerate is 125 MHz / 60 / (4+1) = 520kSPS?
-	// Something is amiss.  I think our actual rate is twice that.
-
-	REG_SET_FIELD(SENS_SAR_MEAS1_CTRL2_REG, SENS_SAR1_EN_PAD, 0xff );
-	REG_SET_FIELD(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD, 0xff );
-	SET_PERI_REG_MASK(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD_FORCE );
-
-	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR1_PATT_LEN, 0);
-	WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x53ffffff);	// set adc1 channel & bitwidth & atten  
-
-	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR2_PATT_LEN, 0);
-	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
-
-	// Set this to 1 for double-channel mode or 2 for alternate-scan mode. (0 for single-channel)
-	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_WORK_MODE, 1);
-	//XXX For some reason SAR1 is much slower than SAR2?  Or something about SAR1 breaks a lot.
-	// Recommend using SAR2 for boundary tests.
-	REG_SET_FIELD(APB_SARADC_CTRL_REG, APB_SARADC_SAR_SEL, 1 ); 
-	CLEAR_PERI_REG_MASK(APB_SARADC_CTRL2_REG, APB_SARADC_MEAS_NUM_LIMIT);
-	
-	// Try 11-bit encoding.  This should set the ADC to Type II DMA Output
-	// which tags each 16-bit sample with which ADC and channel it was reading from.
-	SET_PERI_REG_MASK( APB_SARADC_CTRL_REG, APB_SARADC_DATA_SAR_SEL );
-	
-
-	// Configure DIG ADC CTRL for SPI DMA
-	REG_SET_FIELD(APB_SARADC_DMA_CONF_REG, APB_SARADC_APB_ADC_EOF_NUM, sizeof(link_buf[0])/sizeof(link_buf[0][0]) );
-	SET_PERI_REG_MASK(APB_SARADC_DMA_CONF_REG, APB_SARADC_APB_ADC_TRANS);
-
-	// This appears to be some sort of undocumented register?  Not sure its purpose.
-	REG_SET_FIELD(SENS_SAR_POWER_XPD_SAR_REG, SENS_FORCE_XPD_SAR, 3);
-	
-	// this code replaces the adc_ll_set_controller( ADC_NUM_1, ADC_LL_CTRL_DIG ); 
-	//	function call.
-	SET_PERI_REG_MASK(SENS_SAR_MEAS1_MUX_REG,SENS_SAR1_DIG_FORCE);
-	SET_PERI_REG_MASK(SENS_SAR_MEAS1_CTRL2_REG,SENS_MEAS1_START_FORCE);
-	SET_PERI_REG_MASK(SENS_SAR_MEAS1_CTRL2_REG,SENS_SAR1_EN_PAD_FORCE);
-
-
-	// Unsure why I need to do this twice, otherwise things get janky
-	// and I think? I start reading the wrong ADC or something?
-	CLEAR_PERI_REG_MASK(APB_SARADC_CTRL_REG,APB_SARADC_START_FORCE);
-	SET_PERI_REG_MASK(APB_SARADC_CTRL2_REG,APB_SARADC_TIMER_EN);
-	SET_PERI_REG_MASK(APB_SARADC_CTRL2_REG, APB_SARADC_TIMER_SEL);
-	SET_PERI_REG_MASK(APB_SARADC_CTRL2_REG,APB_SARADC_TIMER_EN);
-
-
-	WRITE_PERI_REG( APB_SARADC_FILTER_CTRL_REG, 0 ); // Disable filters
-	portENABLE_INTERRUPTS();
+	setup_sar();
 
 	for (int i = 1000; i >= 0; i--)
 	{
-		printf("Restarting in %d seconds... %08x %08x %04x %04x %04x %04x %d %d\n", i, READ_PERI_REG(SENS_SAR_MEAS1_CTRL2_REG), READ_PERI_REG( APB_SARADC_CTRL_REG ), link_buf[0][0], link_buf[0][1], link_buf[0][2], link_buf[0][3], inttest1, inttest2 );
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
+		//printf("Restarting in %d seconds... %08x %08x %04x %04x %04x %04x %04x %04x %04x %04x %04x %04x %d\n", i, READ_PERI_REG(SENS_SAR_MEAS1_CTRL2_REG), READ_PERI_REG( APB_SARADC_CTRL_REG ), link_buf[0][4], link_buf[0][5], link_buf[0][6], link_buf[0][7], link_buf[0][8], link_buf[0][9], link_buf[0][10], link_buf[0][11], link_buf[0][12], link_buf[0][13], inttest1 );
+		
+		while( readok == 0 );
+		
+		printf( "%8d %8d: ", inttest1, inttest2 );
+
+		int j;
+#if 0
+		for( j = 0; j < 200; j++ )
+			printf( "%08x ", safe_buf[j] );
+		printf( "\n" );
+#else
+		for( j = 0; j < 200; j++ )
+			printf( "%4d ", safe_buf[j]&0x7ff );
+		printf( "\n" );
+
+#endif
+		readok = 0;
+
+		//printf( "%d, %d %d %d %d %d\n", inttest1, link_buf[0][0]&0x7ff, link_buf[0][1]&0x7ff, link_buf[0][2]&0x7ff, link_buf[0][3]&0x7ff, link_buf[0][4]&0x7ff );
+		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
 	printf("Restarting now.\n");
 	fflush(stdout);
