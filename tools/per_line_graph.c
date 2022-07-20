@@ -6,7 +6,7 @@
 
 
 /* Example
-gcc -o linegraph linegraph.c  -lX11 && stty -F /dev/ttyUSB0 115200 -echo raw && cat /dev/ttyUSB0 | ./linegraph 3
+gcc -o linegraph linegraph.c  -lX11 && stty -F /dev/ttyUSB0 115200 -echo raw | cat /dev/ttyUSB0 | ./linegraph 
 
 */
 
@@ -18,10 +18,20 @@ void HandleDestroy() { }
 int main( int argc, char ** argv )
 {
 	// First parameter (optional) is how many fields to skip.
+	// Second to parameters (optional) = min, max force
 	int offset = 0;
+	float mm_min, mm_max;
+	int force_minmax = 0;
 	if( argc > 1 )
 	{
 		offset = atoi( argv[1] );
+	}
+	
+	if( argc > 3 )
+	{
+		force_minmax = 1;
+		mm_min = atof( argv[2] );
+		mm_max = atof( argv[3] );
 	}
 	
 	CNFGSetup( "per-line grapher", 1024, 768 );
@@ -68,12 +78,19 @@ int main( int argc, char ** argv )
 		int i;
 		double fdmin = 1e20;
 		double fdmax = -1e20;
-		for( i = offset; i < field; i++ )
+		if( force_minmax )
 		{
-			if( fields[i] < fdmin ) fdmin = fields[i];
-			if( fields[i] > fdmax ) fdmax = fields[i];
+			fdmin = mm_min;
+			fdmax = mm_max; 
 		}
-
+		else
+		{
+			for( i = 0; i < field; i++ )
+			{
+				if( fields[i] < fdmin ) fdmin = fields[i];
+				if( fields[i] > fdmax ) fdmax = fields[i];
+			}
+		}
 		//Change color to white.
 		CNFGColor( 0xffffffff ); 
 		
@@ -85,6 +102,15 @@ int main( int argc, char ** argv )
 			double last = h - 1 - (fields[i-1] - fdmin)/(fdmax - fdmin)*(h-1);
 			double next = h - 1 - (fields[i] - fdmin)/(fdmax - fdmin)*(h-1);
 			CNFGTackSegment( fdiv*i, last, fdiv*(i+1), next );	
+		}
+
+		for( i = 0; i < field; i++ )
+		{
+			double now = h - 1 - (fields[i] - fdmin)/(fdmax - fdmin)*(h-1);
+			CNFGTackSegment( fdiv*(i+1)+5, now+5, fdiv*(i+1)-5, now+5 );
+			CNFGTackSegment( fdiv*(i+1)-5, now+5, fdiv*(i+1)-5, now-5 );
+			CNFGTackSegment( fdiv*(i+1)-5, now-5, fdiv*(i+1)+5, now-5 );	
+			CNFGTackSegment( fdiv*(i+1)+5, now-5, fdiv*(i+1)+5, now+5 );	
 		}
 
 		//Display the image and wait for time to display next frame.
