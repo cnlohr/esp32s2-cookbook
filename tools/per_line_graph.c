@@ -5,12 +5,8 @@
 #include "rawdraw_sf.h"
 
 
-/*
-
-Treats each new line as a new frame.  Graphs all the numbers on this line.
-
-Example
-gcc -o per_line_graph per_line_graph.c  -lX11 && stty -F /dev/ttyUSB0 115200 -echo raw | cat /dev/ttyUSB0 | tr -s ' ' | cut -d ' ' -f 4- | ./per_line_graph 
+/* Example
+gcc -o linegraph linegraph.c  -lX11 && stty -F /dev/ttyUSB0 115200 -echo raw && cat /dev/ttyUSB0 | ./linegraph 3
 
 */
 
@@ -18,8 +14,16 @@ void HandleKey( int keycode, int bDown ) { }
 void HandleButton( int x, int y, int button, int bDown ) { }
 void HandleMotion( int x, int y, int mask ) { }
 void HandleDestroy() { }
-int main()
+
+int main( int argc, char ** argv )
 {
+	// First parameter (optional) is how many fields to skip.
+	int offset = 0;
+	if( argc > 1 )
+	{
+		offset = atoi( argv[1] );
+	}
+	
 	CNFGSetup( "per-line grapher", 1024, 768 );
 	while(CNFGHandleInput())
 	{
@@ -44,7 +48,9 @@ int main()
 				{
 					if( c - fieldstart >= 1 )
 					{
-						fields[field++] = atof( fieldstart );
+						if( field-offset >= 0 )
+							fields[field-offset] = atof( fieldstart );
+						field++;
 					}
 					fieldstart = 0;
 				}
@@ -55,13 +61,14 @@ int main()
 				if( !fieldstart ) fieldstart = c;
 			}
 		}
-		if( field == 0 ) continue;
+		field-=offset;
+		if( field <= 0 ) continue;
 		int fdiv = w/field;
 
 		int i;
 		double fdmin = 1e20;
 		double fdmax = -1e20;
-		for( i = 0; i < field; i++ )
+		for( i = offset; i < field; i++ )
 		{
 			if( fields[i] < fdmin ) fdmin = fields[i];
 			if( fields[i] > fdmax ) fdmax = fields[i];
