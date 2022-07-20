@@ -4,11 +4,10 @@
 	Based on examples found in the IDF.
 	
 	Note: There is something janky about SAR ADC (DIG) 1. 2 Seems fine.
-	also, I think this is sampling at 1msps/s.
+	It is sampling at exactly (or almost exactly) 1302 kSPS.
 	
-	This demo samples at approximately 1.4 MHz, one channel on one SAR.
-	
-	It also shows how you can use dual mode.
+	Side-node.  There is no filtering in-chip even on frequencies up to
+	20 MHz.  This is SPECTACULAR for doing zip converting!!! 
 
 */
 #include <stdio.h>
@@ -218,6 +217,12 @@ void IRAM_ATTR __attribute__((noinline)) setup_sar()
 	//
 	// Reducing this value lets you tighten up timer_target
 	const int sar_clk_div = 4; // default is 4. (0 is invalid)
+	
+	
+	// Perf checks.
+	// @1302 kSPS APLL = 125MHz, clkm = 0+1, timer_target = 48,
+	//		sar_clk_div = 4 = 651k * 2 = 1302kSPS (exactly)
+	//
 
 	// Work modes:
 	// 0: Single-ADC mode.
@@ -250,14 +255,11 @@ void IRAM_ATTR __attribute__((noinline)) setup_sar()
 		0<<APB_SARADC_START_FORCE_S // Unsure about this. Seems to need to be 0 to work at all.
 		);
 	
-	// I think this means our samplerate is 125 MHz / 1 [APB_SARADC_CLKM_DIV_NUM+1] / 60 [APB_SARADC_TIMER_TARGET / (4 [APB_SARADC_SAR_CLK_DIV]+1) = 520kSPS?
-	// Something is amiss.  I think our actual rate is twice that.
-
 	REG_SET_FIELD(SENS_SAR_MEAS1_CTRL2_REG, SENS_SAR1_EN_PAD, 0xff );
 	REG_SET_FIELD(SENS_SAR_MEAS2_CTRL2_REG, SENS_SAR2_EN_PAD, 0xff );
 	
-	WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x53ffffff);	// set adc1 channel & bitwidth & atten  
-	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x5fffffff); //set adc2 channel & bitwidth & atten
+	WRITE_PERI_REG(APB_SARADC_SAR1_PATT_TAB1_REG,0x50ffffff);	// set adc1 channel & bitwidth & atten  
+	WRITE_PERI_REG(APB_SARADC_SAR2_PATT_TAB1_REG,0x50ffffff); //set adc2 channel & bitwidth & atten
 
 	// GENERAL NOTE:
 	//	SENS_SAR_MEAS1_CTRL2_REG and SENS_SAR_MEAS1_CTRL2_REG should not be used
