@@ -33,6 +33,11 @@ int ram_main()
 	esp_rom_delay_us( 50000 );
 	esp_rom_printf( "Test Starting BootReason=%d\n", esp_rom_get_reset_reason(0) );
 	esp_rom_delay_us( 10000 );
+	esp_rom_delay_us( 10000 );
+	esp_rom_delay_us( 10000 );
+	esp_rom_delay_us( 10000 );
+	esp_rom_delay_us( 10000 );
+	esp_rom_delay_us( 10000 );
 
 	DPORT_SET_PERI_REG_MASK( DPORT_CPU_PERI_CLK_EN_REG, DPORT_CLK_EN_DEDICATED_GPIO );
     DPORT_CLEAR_PERI_REG_MASK( DPORT_CPU_PERI_RST_EN_REG, DPORT_RST_EN_DEDICATED_GPIO);

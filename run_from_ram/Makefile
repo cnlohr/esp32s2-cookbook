@@ -19,10 +19,11 @@ $(ELF) : main.c
 
 
 main.bin : main.elf
-	xtensa-esp32s2-elf-objcopy -j .inst -O binary $^ debug/$@.inst
-	xtensa-esp32s2-elf-objcopy -j .data -O binary $^ debug/$@.data
-	cat debug/$@.inst debug/$@.data > debug/$@.concat
-	./checksums.c < debug/$@.concat > $@
+	esputil -v mkbin $^ $@
+	#xtensa-esp32s2-elf-objcopy -j .inst -O binary $^ debug/$@.inst
+	#xtensa-esp32s2-elf-objcopy -j .data -O binary $^ debug/$@.data
+	#cat debug/$@.inst debug/$@.data > debug/$@.concat
+	#./checksums.c < debug/$@.concat > $@
 
 #  --before no_reset --after no_reset 
 run : main.bin
@@ -31,7 +32,8 @@ run : main.bin
 	cat /dev/ttyUSB0
 
 flash : main.bin
-	esptool.py --port $(PORT) write_flash 0x1000 $^
+	esputil -p $(PORT) -fp 0x010 flash 0 $^
+	#esptool.py --port $(PORT) write_flash 0x1000 $^
 
 debug/main_flash.bin : main.bin
 

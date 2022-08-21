@@ -1,29 +1,34 @@
 /* Based on a few things, including app_32s2.ld */
 
+
+MEMORY {
+  drom   (rw)   : ORIGIN = 0X3ffa0000, LENGTH = 64k
+  irom0   (rwx)  : ORIGIN = 0x40000000, LENGTH = 64k
+  irom1   (rwx)  : ORIGIN = 0x40010000, LENGTH = 64k
+
+  cache0 (rw)  : ORIGIN = 0x40020000, LENGTH = 32k
+  cache1 (rw)  : ORIGIN = 0x3ffb0000, LENGTH = 32k
+  iram   (rwx)  : ORIGIN = 0x40030000, LENGTH = 256k  /* First section has bootloader */
+  dram   (rw)   : ORIGIN = 0x3ffc0000, LENGTH = 256k
+
+  drtcfast (rw)   : ORIGIN = 0x3ff9E000, LENGTH = 8k
+  irtcfast (rwx)   : ORIGIN = 0x40070000, LENGTH = 8k
+  rtcslow (rwx)   : ORIGIN = 0x50000000, LENGTH = 8k
+
+  iflash (rwx)  : ORIGIN = 0x3F000000, LENGTH = 4096k
+  dflashi (rwx)  : ORIGIN = 0x3F500000, LENGTH = 10752k
+  dflashd (rwx)  : ORIGIN = 0x40080000, LENGTH = 7680k
+}
+
+/* 0x40030000, 0x3ffc0000 */
+
+
+_eram = ORIGIN(dram) + LENGTH(dram);
 ENTRY(ram_main)
-SECTIONS
-{
-	/* We start with our IRAM at 0x4002_8000 (which mirors) 0x3FFB_8000; This provides room for the header. 
-		But we bump it up a little, the software loader is resident 0x40028000-0x40029028.
-		We do 0x40030000, 0x3ffc0000.  This is neat because it also provides access to DRAM.
-	*/
-	. = 0x40030000 - 0x20;
 
-	.inst : ALIGN(4) {
-
-		/* esptool.py header */
-
-		LONG( 0x000001e9 )  /* Magic + we want to have a "jump to" location once we write */
-		LONG( ram_main )
-		LONG( 0x00000000 )
-		LONG( 0x00000002 ) /* was 02000002  Note: LSB is chip ID */
-		LONG( 0x000000e9 )
-		LONG( 0x00000000 )
-		LONG( __CODE_BEGIN__ )
-		LONG( ( __CODE_END__ - __CODE_BEGIN__ + __DATA_END__ - __DATA_BEGIN__ ) )
-
-		__CODE_BEGIN__ = .;
-		sandbox_sentinel_start_inst = .;
+SECTIONS {
+	/* .vectors  : { KEEP(*(.vectors))   } > iram */
+	.text     : {
 		*(.initial_jump)
 		*(.entry.text)
 		*(.init.literal)
@@ -31,146 +36,42 @@ SECTIONS
 		*(.literal .text .literal.* .text.* .stub)
 		*(.out_jump.literal.*)
 		*(.out_jump.*)
-		. = ALIGN(16);
-		__CODE_END__ = .;
-	}
+	} > iram AT > dram
 
-	. = 0x3ffc0000;
-	sandbox_sentinel_origin_data = .;
-	. = 0x3ffc0000 + __CODE_END__ - __CODE_BEGIN__;
-
-	.data : ALIGN(16) {
-		__DATA_BEGIN__ = .;
+	.data : {
+		. = ALIGN(4);
+		_sdata = .;
+		*(.data)
+		*(.data*)
 		*(.rodata)
-		*(.rodata.*)
+		*(.rodata*)
 		*(.gnu.linkonce.r.*)
 		*(.rodata1)
-		*(.dynsbss)
-		*(.sbss)
-		*(.sbss.*)
-		*(.gnu.linkonce.sb.*)
-		*(.scommon)
-		*(.sbss2)
-		*(.sbss2.*)
-		*(.gnu.linkonce.sb2.*)
-		*(.dynbss)
-		*(.data)
-		*(.data.*)
+		. = ALIGN(4);
+		_edata = .;
+	} > dram
 
-		/* For the fake checksum */
+	.bss : {
+		. = ALIGN(4);
+		_sbss = .;
+		*(.bss)
+		*(.bss*)
+		*(COMMON)
+		. = ALIGN(4);
+		_ebss = .;
+	} > dram
 
-		__DATA_END__ = .;
+	. = ALIGN(4);
+	PROVIDE(end = .);
+	PROVIDE(_end = .);
 
-/*
-		. = ALIGN(16);
-		__DATA_END__ = .;
-		BYTE( 0x00 )
-		BYTE( 0x00 )
-		BYTE( 0x00 )
-		BYTE( 0x00 )
-*/
-		/* Add Checksum */
-		/* Add SHA-256 */
-	}
-
-/*
-	sandbox_sentinel_end_inst = .;
-	. = 0x3ffeabc4;
-	sandbox_sentinel_origin_data = .;
-	. = 0x3ffeabc4 + sandbox_sentinel_end_inst - sandbox_sentinel_start_inst;
-
-
-
-	.data : ALIGN(4) {
-		sandbox_sentinel_start_data = .;
-		*(.rodata)
-		*(.rodata.*)
-		*(.gnu.linkonce.r.*)
-		*(.rodata1)
-		*(.dynsbss)
-		*(.sbss)
-		*(.sbss.*)
-		*(.gnu.linkonce.sb.*)
-		*(.scommon)
-		*(.sbss2)
-		*(.sbss2.*)
-		*(.gnu.linkonce.sb2.*)
-		*(.dynbss)
-		*(.data)
-		*(.data.*)
-		__IMAGE_END__ = .;
-
-		BYTE( 0 ) // There's a janky edge case with esptool.py that this solves 
-
-	}
-
-	.checksum : ALIGN(16) {
-		BYTE( 0 )
-	}
-*/
-
-/*
-	sandbox_sentinel_start_inst = .;
-	.inst : ALIGN(4) {
-		*(.entry.text)
-		*(.init.literal)
-		*(.init)
-		*(.literal .text .literal.* .text.* .stub .gnu.warning .gnu.linkonce.literal.* .gnu.linkonce.t.*.literal .gnu.linkonce.t.* .iram* .iram1 .iram1.*)
-		*(.fini.literal)
-		*(.fini)
-		*(.gnu.version)
-
-		sandbox_sentinel_start_data = .;
-		*(.rodata)
-		*(.rodata.*)
-		*(.gnu.linkonce.r.*)
-		*(.rodata1)
-		*(.dynsbss)
-		*(.sbss)
-		*(.sbss.*)
-		*(.gnu.linkonce.sb.*)
-		*(.scommon)
-		*(.sbss2)
-		*(.sbss2.*)
-		*(.gnu.linkonce.sb2.*)
-		*(.dynbss)
-		*(.data)
-		*(.data.*)
-	}
-	sandbox_sentinel_end_inst = .;
-*/
-/*
-	. = 0x3ffe1000;
-	sandbox_sentinel_origin_data = .;
-	. = 0x3ffe1000 + sandbox_sentinel_end_inst - sandbox_sentinel_start_inst;
-*/
-/*
-	.data : ALIGN(4) {
-		sandbox_sentinel_start_data = .;
-		*(.rodata)
-		*(.rodata.*)
-		*(.gnu.linkonce.r.*)
-		*(.rodata1)
-		*(.dynsbss)
-		*(.sbss)
-		*(.sbss.*)
-		*(.gnu.linkonce.sb.*)
-		*(.scommon)
-		*(.sbss2)
-		*(.sbss2.*)
-		*(.gnu.linkonce.sb2.*)
-		*(.dynbss)
-		*(.data)
-		*(.data.*)
-	}
-	sandbox_sentinel_end_data = .;
-	.bss : ALIGN( 4 ) {
-		*(.bss) // Tricky: BSS needs to be allocated but not sent. GCC Will not populate these for calculating data size
-		*(.bss.*)
-	}
-*/
-	sandbox_bss_size = SIZEOF( .bss );
+	/*
+	/DISCARD/ : { *(.debug) *(.debug*) *(.xtensa.*) *(.comment) }
+	*/
 }
+
+
+
 
 INCLUDE "/home/cnlohr/esp/esp-idf/components/esp_rom/esp32s2/ld/esp32s2.rom.ld"
 INCLUDE "/home/cnlohr/esp/esp-idf/components/soc/esp32s2/ld/esp32s2.peripherals.ld"
