@@ -2,6 +2,9 @@ ELF:=main.elf
 
 all : $(ELF)
 
+
+PORT?=/dev/ttyUSB0
+
 LINKER_SCRIPT:=esp32s2-ram.lds
 
 
@@ -18,13 +21,22 @@ $(ELF) : main.c
 main.bin : main.elf
 	xtensa-esp32s2-elf-objcopy -j .inst -O binary $^ debug/$@.inst
 	xtensa-esp32s2-elf-objcopy -j .data -O binary $^ debug/$@.data
-	cat debug/$@.inst debug/$@.data > $@
+	cat debug/$@.inst debug/$@.data > debug/$@.concat
+	./checksums.c < debug/$@.concat > $@
 
 #  --before no_reset --after no_reset 
 run : main.bin
-	esptool.py --no-stub --port /dev/ttyUSB0 load_ram $<
+	esptool.py --no-stub --port $(PORT) load_ram $<
 	stty -F /dev/ttyUSB0 115200 -echo raw
 	cat /dev/ttyUSB0
+
+flash : main.bin
+	esptool.py --port $(PORT) write_flash 0x1000 $^
+
+debug/main_flash.bin : main.bin
+
+monitor : 
+	stty -F $(PORT) 115200 -echo raw && cat $(PORT)
 
 clean :
 	rm -rf *.o *~ $(ELF) main.bin debug/debug_main_s.txt debug/debug_main_t.txt debug/debug_main_S.txt main_inst.bin main_data.bin debug

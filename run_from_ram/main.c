@@ -30,12 +30,12 @@ void main_loop();
 
 int ram_main()
 {
-	esp_rom_delay_us( 200000 );
-	esp_rom_printf( "Hello, world!\n" );
+	esp_rom_delay_us( 50000 );
+	esp_rom_printf( "Test Starting BootReason=%d\n", esp_rom_get_reset_reason(0) );
+	esp_rom_delay_us( 10000 );
 
 	DPORT_SET_PERI_REG_MASK( DPORT_CPU_PERI_CLK_EN_REG, DPORT_CLK_EN_DEDICATED_GPIO );
     DPORT_CLEAR_PERI_REG_MASK( DPORT_CPU_PERI_RST_EN_REG, DPORT_RST_EN_DEDICATED_GPIO);
-
 
 
 	// Setup GPIO16 to be the PRO ALONE output.
@@ -201,10 +201,12 @@ int ram_main()
 		// @ 0x6B -> Will not work at = 12 (When conencted to bus)
 
 #define RUN_AT_400MHZ
-
 #ifdef RUN_AT_400MHZ
 	div_ref = 7;
 	div7_0 = 156;
+#elif defined( RUN_AT_500MHZ)
+	div_ref = 7;
+	div7_0 = 206;
 #endif
 
 
@@ -249,6 +251,22 @@ int ram_main()
 
 #define NOP5		__asm__ __volatile__ ("nop\nnop\nnop\nnop\nnop");
 #define NOP10  NOP5 NOP5
+
+
+	// Lastly we disable the WDT.  WHY IS THIS BROKEN?
+	WRITE_PERI_REG(RTC_CNTL_WDTWPROTECT_REG, RTC_CNTL_WDT_WKEY_VALUE);
+	REG_SET_BIT(RTC_CNTL_WDTFEED_REG, RTC_CNTL_WDT_FEED);
+	REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_STG0, RTC_WDT_STAGE_ACTION_OFF);
+	REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_STG1, RTC_WDT_STAGE_ACTION_OFF);
+	REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_STG2, RTC_WDT_STAGE_ACTION_OFF);
+	REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_STG3, RTC_WDT_STAGE_ACTION_OFF);
+	REG_CLR_BIT(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_FLASHBOOT_MOD_EN);
+	REG_CLR_BIT(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_EN);
+	WRITE_PERI_REG( RTC_CNTL_WDTCONFIG1_REG, 0xffffffff );
+	WRITE_PERI_REG( RTC_CNTL_WDTCONFIG2_REG, 0xffffffff );
+	WRITE_PERI_REG( RTC_CNTL_WDTCONFIG3_REG, 0xffffffff );
+	WRITE_PERI_REG( RTC_CNTL_WDTCONFIG4_REG, 0xffffffff );
+	WRITE_PERI_REG(RTC_CNTL_WDTWPROTECT_REG, 0);
 
 	main_loop();
 /*

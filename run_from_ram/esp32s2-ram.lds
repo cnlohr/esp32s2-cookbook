@@ -16,7 +16,7 @@ SECTIONS
 		LONG( 0x000001e9 )  /* Magic + we want to have a "jump to" location once we write */
 		LONG( ram_main )
 		LONG( 0x00000000 )
-		LONG( 0x02000002 )
+		LONG( 0x00000002 ) /* was 02000002  Note: LSB is chip ID */
 		LONG( 0x000000e9 )
 		LONG( 0x00000000 )
 		LONG( __CODE_BEGIN__ )
@@ -56,12 +56,21 @@ SECTIONS
 		*(.dynbss)
 		*(.data)
 		*(.data.*)
-		__DATA_END__ = .;
 
 		/* For the fake checksum */
-		BYTE( 0 )
-		. = ALIGN( 16 );
-		BYTE( 0 )
+
+		__DATA_END__ = .;
+
+/*
+		. = ALIGN(16);
+		__DATA_END__ = .;
+		BYTE( 0x00 )
+		BYTE( 0x00 )
+		BYTE( 0x00 )
+		BYTE( 0x00 )
+*/
+		/* Add Checksum */
+		/* Add SHA-256 */
 	}
 
 /*
