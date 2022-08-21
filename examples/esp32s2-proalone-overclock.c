@@ -56,10 +56,6 @@ void sandbox_main(display_t * disp)
 
 	DPORT_SET_PERI_REG_MASK( DPORT_CPU_PERI_CLK_EN_REG, DPORT_CLK_EN_DEDICATED_GPIO );
     DPORT_CLEAR_PERI_REG_MASK( DPORT_CPU_PERI_RST_EN_REG, DPORT_RST_EN_DEDICATED_GPIO);
-
-
-	DPORT_SET_PERI_REG_MASK( DPORT_CPU_PERI_CLK_EN_REG, DPORT_CLK_EN_DEDICATED_GPIO );
-    DPORT_CLEAR_PERI_REG_MASK( DPORT_CPU_PERI_RST_EN_REG, DPORT_RST_EN_DEDICATED_GPIO);
 #if 1
 	// Somehow, gpio_config in this context does something to prevent us from permacrashing.
     gpio_config_t io_conf={
@@ -91,7 +87,6 @@ void sandbox_main(display_t * disp)
 
 
 	DPORT_REG_WRITE( DEDIC_GPIO_OUT_CPU_REG, 0x01 ); // Enable CPU instruction output
-	gpio_matrix_out( GPIO_NUM_16, PRO_ALONEGPIO_OUT0_IDX, 0, 0 );
 
 
 	// Disable interrupts.  Period.
@@ -144,6 +139,8 @@ void sandbox_main(display_t * disp)
 	{
         CLEAR_PERI_REG_MASK(DPORT_CPU_PER_CONF_REG, DPORT_PLL_FREQ_SEL);
         div_ref = 9; 
+
+			// NOTE: This is _I think_ 2X the main CLK frequency.  Just beware these are bonkers high frequencies.
 			// 0: 80 MHz
 			// 1: 40 MHz base (+10MHz per div)
 			// 2: 26.6666 + 6.6666 per div
