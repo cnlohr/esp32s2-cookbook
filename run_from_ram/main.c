@@ -120,8 +120,8 @@ int ram_main()
 	div7_0 = 28;
 	// Freq = 20 / (1+div_ref) * ( div7_0 + 4 )
 
-	#define F_PLL 400  
-
+	#define F_PLL 500  
+	int FCAL_MODE = 0;
 	int normal_dhref = 1;
 	int normal_dlref = 2;
 #if (F_PLL == 400)
@@ -144,6 +144,7 @@ int ram_main()
 	SEL_2_CDIV = 2;
 	normal_dhref = 2; // Go un-regulated.
 	normal_dlref = 0;
+	FCAL_MODE = 1;
 #elif (F_PLL == 80)
 	div_ref = 7;
 	div7_0 = 28;
@@ -174,7 +175,7 @@ int ram_main()
 	#define dcur 1  // as it goes up, peak frequency goes down.
 	#define i2c_bbpll_div_7_0 div7_0
 
-	REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_REF_DIV, (dchgp << I2C_BBPLL_OC_DCHGP_LSB) | (div_ref) | 0x80 );    // Address 2  (div_ref is bottom nibble)
+	REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_REF_DIV, (dchgp << I2C_BBPLL_OC_DCHGP_LSB) | (div_ref) | FCAL_MODE<<I2C_BBPLL_OC_ENB_FCAL_LSB );    // Address 2  (div_ref is bottom nibble)
 	REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_OC_DIV_7_0, i2c_bbpll_div_7_0); // Address 3
 
 	// NOTE: This register is actually responsible for DR1, DR3 and USB
