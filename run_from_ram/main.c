@@ -33,9 +33,10 @@ void uart_tx_one_char( char c );
 
 int ram_main()
 {
-	esp_rom_delay_us( 50000 );
-	esp_rom_printf( "Test Starting BootReason=%d\n", esp_rom_get_reset_reason(0) );
-	esp_rom_delay_us( 10000 );
+	// To let the monitor attach.
+	esp_rom_delay_us( 40000 );
+	esp_rom_printf( "Starting\n" );
+	esp_rom_delay_us( 1000 ); // Allow enough time for the string to print.
 
 	DPORT_SET_PERI_REG_MASK( DPORT_CPU_PERI_CLK_EN_REG, DPORT_CLK_EN_DEDICATED_GPIO );
 	DPORT_CLEAR_PERI_REG_MASK( DPORT_CPU_PERI_RST_EN_REG, DPORT_RST_EN_DEDICATED_GPIO);
@@ -44,23 +45,11 @@ int ram_main()
 	REG_WRITE( GPIO_OUT_W1TC_REG, 1<<16 );
 	REG_WRITE( GPIO_ENABLE_W1TS_REG, 1<<16 );
 	REG_WRITE( IO_MUX_GPIO16_REG, 2<<FUN_DRV_S );
-	DPORT_REG_WRITE( GPIO_FUNC16_OUT_SEL_CFG_REG, PRO_ALONEGPIO_OUT0_IDX );
-
-	DPORT_REG_WRITE( DEDIC_GPIO_OUT_CPU_REG, 0x01 ); // Enable CPU instruction output
+	REG_WRITE( GPIO_FUNC16_OUT_SEL_CFG_REG, PRO_ALONEGPIO_OUT0_IDX );
+	REG_WRITE( DEDIC_GPIO_OUT_CPU_REG, 0x01 ); // Enable CPU instruction output
 
 	// Disable interrupts.  Period.
 	XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL);
-
-	// This sets the CPU VBIAS, If you go too fast (like >300 MHz on 1.1V)
-	// it will cause the CPU to crash.  You can turn this down if you don't need it.
-	REG_SET_FIELD(RTC_CNTL_REG, RTC_CNTL_DIG_DBIAS_WAK, RTC_CNTL_DBIAS_1V25);
-	REG_SET_FIELD(RTC_CNTL_REG, RTC_CNTL_DIG_DBIAS_SLP, RTC_CNTL_DBIAS_1V25);
-
-	// We don't want the BBPLL because we aren't doing wifi.
-	CLEAR_PERI_REG_MASK(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_BBPLL_FORCE_PU);
-	CLEAR_PERI_REG_MASK(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_BBPLL_I2C_FORCE_PU);
-	CLEAR_PERI_REG_MASK(RTC_CNTL_OPTIONS0_REG, RTC_CNTL_BB_I2C_FORCE_PU);
-	CLEAR_PERI_REG_MASK(RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_FORCE_PU);
 
 	// Setup the super watchdog to auto-feed.
 	REG_SET_BIT(RTC_CNTL_SWD_CONF_REG, RTC_CNTL_SWD_AUTO_FEED_EN);
@@ -76,15 +65,14 @@ int ram_main()
 	// XXX DO NOT DELETE - this prevents the TG0WDT_SYS_RST from hitting. 
 	REG_CLR_BIT( DPORT_PERIP_CLK_EN0_REG, DPORT_TIMERGROUP_CLK_EN );
 	
-
-	// Disable the system cache.
-	WRITE_PERI_REG( DPORT_CACHE_CONTROL_REG, 1<<2 );
-
 	// Change system frequency 
 
+	// This sets the CPU VBIAS, If you go too fast (like >300 MHz on 1.1V)
+	// it will cause the CPU to crash.  You can turn this down if you don't need it.
+	REG_SET_FIELD(RTC_CNTL_REG, RTC_CNTL_DIG_DBIAS_WAK, RTC_CNTL_DBIAS_1V25);
+	REG_SET_FIELD(RTC_CNTL_REG, RTC_CNTL_DIG_DBIAS_SLP, RTC_CNTL_DBIAS_1V25);
 
 	// SYSTEM_SOC_CLK_SEL  (Divisors for CPU (we will actually set later))
-
 	// 0 = XTAL
 	// 1 = PLL (default)
 	// 2 = CLK8M
@@ -120,7 +108,7 @@ int ram_main()
 	div7_0 = 28;
 	// Freq = 20 / (1+div_ref) * ( div7_0 + 4 )
 
-	#define F_PLL 500  
+	#define F_PLL 400  
 	int FCAL_MODE = 0;
 	int normal_dhref = 1;
 	int normal_dlref = 2;
@@ -193,8 +181,8 @@ int ram_main()
 
 	// TRICKY: We switch the CPU over immediately, so that it can sync onto the PLL, otherwise,
 	// if we wait (like we should) we could miss the boat.  This is only a concern it seems when going > 400 MHz
-	DPORT_REG_WRITE( DPORT_CPU_PER_CONF_REG, ( DPORT_REG_READ( DPORT_CPU_PER_CONF_REG ) & 0xfffffff8 ) | (SEL_1_PLL << 2) | (SEL_2_CDIV << 0) );
-	DPORT_REG_WRITE( DPORT_SYSCLK_CONF_REG, ( DPORT_REG_READ( DPORT_SYSCLK_CONF_REG ) & 0xfffff3ff ) | (clock_source << 10) );
+	REG_WRITE( DPORT_CPU_PER_CONF_REG, ( DPORT_REG_READ( DPORT_CPU_PER_CONF_REG ) & 0xfffffff8 ) | (SEL_1_PLL << 2) | (SEL_2_CDIV << 0) );
+	REG_WRITE( DPORT_SYSCLK_CONF_REG, ( DPORT_REG_READ( DPORT_SYSCLK_CONF_REG ) & 0xfffff3ff ) | (clock_source << 10) );
 
 
 #define NOP5		__asm__ __volatile__ ("nop\nnop\nnop\nnop\nnop");

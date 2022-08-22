@@ -1,5 +1,5 @@
 /* Based on a few things, including app_32s2.ld, but notably, CPQ's MDK https://github.com/cpq/mdk */
-
+/* This works both for RAM and for flash */
 
 MEMORY {
   drom   (rw)   : ORIGIN = 0X3ffa0000, LENGTH = 64k
