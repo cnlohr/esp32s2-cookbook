@@ -1,4 +1,4 @@
-/* Based on a few things, including app_32s2.ld */
+/* Based on a few things, including app_32s2.ld, but notably, CPQ's MDK https://github.com/cpq/mdk */
 
 
 MEMORY {
