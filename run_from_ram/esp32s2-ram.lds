@@ -36,6 +36,7 @@ SECTIONS {
 		*(.literal .text .literal.* .text.* .stub)
 		*(.out_jump.literal.*)
 		*(.out_jump.*)
+		. = ALIGN(4);
 	} > iram AT > dram
 
 	.data : {

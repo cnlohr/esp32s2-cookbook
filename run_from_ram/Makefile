@@ -20,6 +20,7 @@ $(ELF) : main.c
 
 main.bin : main.elf
 	esputil -v mkbin $^ $@
+    #  -chip esp32-s2 
 	#xtensa-esp32s2-elf-objcopy -j .inst -O binary $^ debug/$@.inst
 	#xtensa-esp32s2-elf-objcopy -j .data -O binary $^ debug/$@.data
 	#cat debug/$@.inst debug/$@.data > debug/$@.concat
@@ -32,7 +33,7 @@ run : main.bin
 	cat /dev/ttyUSB0
 
 flash : main.bin
-	esputil -p $(PORT) -fp 0x010 flash 0 $^
+	esputil -p $(PORT) -fp 0x010 flash 0x1000 $^
 	#esptool.py --port $(PORT) write_flash 0x1000 $^
 
 debug/main_flash.bin : main.bin
