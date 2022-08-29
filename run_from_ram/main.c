@@ -108,7 +108,7 @@ int ram_main()
 	div7_0 = 28;
 	// Freq = 20 / (1+div_ref) * ( div7_0 + 4 )
 
-	#define F_PLL 400  
+	#define F_PLL FAST  
 	int FCAL_MODE = 0;
 	int normal_dhref = 1;
 	int normal_dlref = 2;
@@ -123,8 +123,7 @@ int ram_main()
 	SEL_1_PLL = 0;
 	SEL_2_CDIV = 2;
 	normal_dlref = 0;
-#elif (F_PLL == 666)
-	// Not actually 666.
+#elif (F_PLL == FAST)
 	// Just an unattainable frequency.
 	div_ref = 4;
 	div7_0 = 255;
