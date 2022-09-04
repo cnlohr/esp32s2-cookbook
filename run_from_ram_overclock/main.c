@@ -17,9 +17,6 @@ char temp[1024];
 
 int ets_printf( const char *restrict format, ... );
 
-uint32_t marker = 0xaabbcc12;
-//uint8_t markx[16] = { 'h', 'e', 'l', 'l', 'o', 0 };
-
 void uart_tx_flush();
 void rom_i2c_writeReg(uint8_t block, uint8_t host_id, uint8_t reg_add, uint8_t data);
 void rom_i2c_writeReg_Mask(uint8_t block, uint8_t host_id, uint8_t reg_add, uint8_t msb, uint8_t lsb, uint8_t data);
