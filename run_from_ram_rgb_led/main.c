@@ -76,11 +76,7 @@ int ram_main()
 	// XXX DO NOT DELETE - this prevents the TG0WDT_SYS_RST from hitting. 
 	REG_CLR_BIT( DPORT_PERIP_CLK_EN0_REG, DPORT_TIMERGROUP_CLK_EN );
 
-#define nop __asm__ __volatile__("nop\n")
-#define NOP5		__asm__ __volatile__ ("nop\nnop\nnop\nnop\nnop");
-#define NOP10 { NOP5 NOP5 }
-
-//	main_loop();
+	#define nop __asm__ __volatile__("nop\n")
 
 	int frame = 0;
 
@@ -107,7 +103,7 @@ int ram_main()
 			ws_out<<=1;
 		}
 
-		// Wait 10ms.
+		// Wait 5ms.
 		esp_rom_delay_us( 5000 );
 		frame++;
 	} while( 1 );
