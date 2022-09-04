@@ -33,15 +33,15 @@ int hueval( int i )
 	i = i & 511;
 	if( i < 85 )
 	{
-		return i * 3;
+		return i*3+1;
 	}
-	else if( i < 255 )
+	else if( i < 256 )
 	{
 		return 255;
 	}
 	else if( i < 341 )
 	{
-		return 1278 - i * 3;
+		return 1022 - i * 3;
 	}
 	return 0;
 }
@@ -97,11 +97,11 @@ int ram_main()
 		{
 			__asm__ __volatile__ ("set_bit_gpio_out 0x1");
 
-			int high_for = ( ws_out & 0x800000 )?1:3;
+			int high_for = ( ws_out & 0x800000 )?3:1;
 			for( spin = 0; spin < high_for; spin++ ) nop;
 
 			__asm__ __volatile__ ("clr_bit_gpio_out 0x1");
-			int low_for = ( ws_out & 0x800000 )?3:1;
+			int low_for = ( ws_out & 0x800000 )?1:3;
 			for( spin = 0; spin < low_for; spin++ ) nop;
 
 			ws_out<<=1;
