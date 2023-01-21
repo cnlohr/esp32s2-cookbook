@@ -63,7 +63,7 @@ int main( int argc, char ** argv )
 	int first = 1;
 
 	hid_init();
-	hd = hid_open( VID, PID, 0 );
+	hd = hid_open( VID, PID, L"usbsandbox000" );
 	if( !hd ) { fprintf( stderr, "Could not open USB [interactive]\n" ); return -94; }
 	file_timespecs = calloc( sizeof(struct timespec), argc );
 	CheckTimespec( argc, argv );

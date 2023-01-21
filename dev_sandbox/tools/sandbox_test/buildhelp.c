@@ -44,7 +44,7 @@ int main( int argc, char ** argv )
 	uint32_t allocated_size = 0;
 
 	hid_init();
-	hid_device * hd = hid_open( VID, PID, 0);
+	hid_device * hd = hid_open( VID, PID, L"usbsandbox000" );
 
 	if( !hd )
 	{

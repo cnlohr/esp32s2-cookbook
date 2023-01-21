@@ -65,11 +65,6 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay };
 
 void app_main(void)
 {
-	printf("Disabling USB Now.\n");
-	
-	void bus_reset();
-	bus_reset();
-
 	printf("Hello world! Keep table at %p\n", &keep_symbols );
 
 	esp_log_set_vprintf( advanced_usb_write_log_printf );
