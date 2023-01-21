@@ -9,18 +9,25 @@
 #include "advanced_usb_control.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "ulp_riscv.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/system_reg.h"
 #include "soc/syscon_reg.h"
 #include "driver/rtc_io.h"
 #include "rom/rtc.h"
+#include "esp32s2/ulp.h"
+#include "ulp_fsm_common.h"
+#include "soc/rtc_io_reg.h"
 
-extern void * ulp_binary_image;
-extern void * ulp_binary_image_end;
+
+//Yuck - because the sandbox is built for the RISC-V ULP
+// we have to do this this to get access to the FSM ULP.
+#pragma GCC diagnostic ignored "-Wformat"
+#include "ulp/ulp_fsm/ulp_macro.c"
+#define TAG NOTAG
+#include "ulp/ulp_fsm/ulp.c"
+
 
 int last_ulp_counter;
-extern volatile int ulp_global_counter;
 
 int global_i = 100;
 
@@ -38,22 +45,19 @@ static inline uint32_t getCycleCount()
 
 void sandbox_main()
 {
-	esp_err_t e;
-
 	// Select:
 	//	RTC_CNTL_FAST_CLK_RTC_SEL = 
 	uint32_t temp = REG_READ( RTC_CNTL_CLK_CONF_REG );
 	uprintf( "Original RTC_CNTL_CLK_CONF_REG = %08x\n", temp );
 
 	// Select slow-clock source.  0=RC
-
 	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_ANA_CLK_RTC_SEL_V, 0, RTC_CNTL_ANA_CLK_RTC_SEL_S );
 
 	//RC_FAST_CLK (1) @ ~5-10MHz or XTAL_DIV_CLK (0) @ 10MHz exactly.
-	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_FAST_CLK_RTC_SEL_V, 0, RTC_CNTL_FAST_CLK_RTC_SEL_S );
+	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_FAST_CLK_RTC_SEL_V, 1, RTC_CNTL_FAST_CLK_RTC_SEL_S );
 
 	//Set clock divisor.  0 seems to be fastest.
-	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_DIV_SEL_V, 7, RTC_CNTL_CK8M_DIV_SEL_S );
+	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_DIV_SEL_V, 0, RTC_CNTL_CK8M_DIV_SEL_S );
 
 	//Activate divisor.
 	SET_PERI_REG_BITS( RTC_CNTL_CLK_CONF_REG, RTC_CNTL_CK8M_DIV_SEL_VLD_V, 1, RTC_CNTL_CK8M_DIV_SEL_VLD_S );
@@ -72,18 +76,28 @@ void sandbox_main()
 	SET_PERI_REG_MASK( RTC_CNTL_SLOW_CLK_CONF_REG, RTC_CNTL_ANA_CLK_DIV_VLD );
 
 	rtc_gpio_init( GPIO_NUM_6 );
+	rtc_gpio_set_direction( GPIO_NUM_6, RTC_GPIO_MODE_OUTPUT_ONLY );
 
-	ulp_riscv_halt();
-	uprintf( "sandbox_main()\n" );
-	uint8_t * ulp_begin = (uint8_t*)&ulp_binary_image;
-	int ulp_len = (uint8_t*)&ulp_binary_image_end - ulp_begin;
-	uprintf( "ULP Image: %p %d\n", ulp_begin, ulp_len );
-	e = ulp_riscv_load_binary( ulp_begin, ulp_len );
-	uprintf( "Result: %d\n", e );
-	ulp_riscv_run(); 
+	// Depressing - when using FSM, it looks like it takes
+	// 12 cycles to output to a port(!!) :( :(
+	// This toggles GPIO6.
+
+	ulp_insn_t program[] = {
+		M_LABEL( 1 ),	// Label 1
+		I_WR_REG_BIT(RTC_GPIO_OUT_REG, 16, 1),
+		I_WR_REG_BIT(RTC_GPIO_OUT_REG, 16, 0),
+		M_BX(1),
+		I_HALT()
+	};
+
+
+	size_t load_addr = 0;
+	size_t size = sizeof(program)/sizeof(ulp_insn_t);
+	ulp_process_macros_and_load(load_addr, program, &size);
+	ulp_run(load_addr);
 
 	// Run this to force operation in case it got stuck before boot.
-	CLEAR_PERI_REG_MASK( RTC_CNTL_COCPU_CTRL_REG, RTC_CNTL_COCPU_DONE );
+//	CLEAR_PERI_REG_MASK( RTC_CNTL_COCPU_CTRL_REG, RTC_CNTL_COCPU_DONE );
 }
 
 void sandbox_tick()
@@ -91,13 +105,20 @@ void sandbox_tick()
 	//uint32_t start = getCycleCount();
 	//uint32_t end = getCycleCount();
 	
-	uint32_t counter = ulp_global_counter;
-	uint32_t delta = counter - last_ulp_counter;
+	uint32_t counter = *((uint32_t*)0x50000010);
+	//uint32_t delta = counter - last_ulp_counter;
 	last_ulp_counter = counter;
-	uprintf( "ULP: %d\n", delta ); 
-	
+	uprintf( "ULP: %d\n", counter );  
+	int i;
+	for( i = 0; i < 40; i++ )
+	{
+		uprintf( "%08x ", *((uint32_t*)(i*4+0x50000000)) );
+	}
+	uprintf( "\n" );
+
+
 	vTaskDelay( 100 );
-	SET_PERI_REG_MASK( RTC_CNTL_COCPU_CTRL_REG, RTC_CNTL_COCPU_SW_INT_TRIGGER );
+	//SET_PERI_REG_MASK( RTC_CNTL_COCPU_CTRL_REG, RTC_CNTL_COCPU_SW_INT_TRIGGER );
 }
 
 struct SandboxStruct sandbox_mode =

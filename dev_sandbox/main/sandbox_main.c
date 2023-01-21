@@ -17,6 +17,7 @@
 #include "soc/system_reg.h"
 #include "soc/usb_reg.h"
 #include "ulp_riscv.h"
+#include "driver/rtc_io.h"
 
 #define SOC_DPORT_USB_BASE 0x60080000
 
@@ -67,7 +68,8 @@ void esp_sleep_enable_timer_wakeup();
 volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
 	ulp_riscv_timer_resume, ulp_riscv_timer_stop, ulp_riscv_load_binary,
 	ulp_riscv_run, ulp_riscv_config_and_run, esp_sleep_enable_timer_wakeup,
-	ulp_set_wakeup_period };
+	ulp_set_wakeup_period, rtc_gpio_init, rtc_gpio_set_direction,
+	rtc_gpio_set_level };
 
 void app_main(void)
 {
