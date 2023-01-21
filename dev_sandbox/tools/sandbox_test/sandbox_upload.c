@@ -220,7 +220,6 @@ int main()
 
 	printf( "Upload complete.  Starting main: 0x%08x\n", sandbox_main_address );
 
-/*
 	// Issue execute.
 	rdata[0] = 170;
 	rdata[1] = 6;
@@ -234,7 +233,7 @@ int main()
 		if( tries++ > 10 ) { fprintf( stderr, "Error sending feature report on command %d (%d)\n", rdata[1], r ); return -85; }
 	} while ( r < 6 );
 	tries = 0;
-*/
+
 	printf( "Adding mode address: 0x%08x\n", sandbox_mode_address );
 
 	// Set tick.

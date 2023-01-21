@@ -27,16 +27,16 @@ static inline uint32_t getCycleCount()
 
 void sandbox_main()
 {
-//	ESP_LOGI( "sandbox", "Running from IRAM. %d", global_i );
-//	ESP_LOGI( "sandbox", "Loaded" );
+	uprintf( "sandbox_main()\n" );
 }
+
 
 void sandbox_tick()
 {
 	uint32_t start = getCycleCount();
 	uint32_t end = getCycleCount();
 	uprintf( "%d\n", end-start );
-	vTaskDelay( 1 );
+	vTaskDelay( 100 );
 }
 
 struct SandboxStruct sandbox_mode =

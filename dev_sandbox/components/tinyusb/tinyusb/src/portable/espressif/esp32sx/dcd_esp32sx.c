@@ -87,7 +87,7 @@ static uint8_t get_free_fifo(void)
 }
 
 // Setup the control endpoint 0.
-static void bus_reset(void)
+void bus_reset(void)
 {
   for (int ep_num = 0; ep_num < USB_OUT_EP_NUM; ep_num++) {
     USB0.out_ep_reg[ep_num].doepctl |= USB_DO_SNAK0_M; // DOEPCTL0_SNAK

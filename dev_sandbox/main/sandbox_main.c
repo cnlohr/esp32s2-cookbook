@@ -11,6 +11,13 @@
 #include "advanced_usb_control.h"
 #include "esp_task_wdt.h"
 #include "esp_log.h"
+#include "soc/dedic_gpio_reg.h"
+#include "driver/gpio.h"
+#include "soc/soc.h"
+#include "soc/system_reg.h"
+#include "soc/usb_reg.h"
+
+#define SOC_DPORT_USB_BASE 0x60080000
 
 struct SandboxStruct * g_SandboxStruct;
 
@@ -58,6 +65,11 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay };
 
 void app_main(void)
 {
+	printf("Disabling USB Now.\n");
+	
+	void bus_reset();
+	bus_reset();
+
 	printf("Hello world! Keep table at %p\n", &keep_symbols );
 
 	esp_log_set_vprintf( advanced_usb_write_log_printf );
@@ -76,27 +88,13 @@ void app_main(void)
 	// esp_efuse_set_rom_log_scheme(ESP_EFUSE_ROM_LOG_ALWAYS_OFF);
 	esp_efuse_set_rom_log_scheme(ESP_EFUSE_ROM_LOG_ALWAYS_ON);
 
-	/* Print chip information */
-	esp_chip_info_t chip_info;
-	esp_chip_info(&chip_info);
-	printf("This is %s chip with %d CPU core(s), WiFi%s%s, ",
-			CONFIG_IDF_TARGET,
-			chip_info.cores,
-			(chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-			(chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
-
-	printf("silicon revision %d, ", chip_info.revision);
-
-	printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-			(chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
-
     tinyusb_config_t tusb_cfg = {};
     tinyusb_driver_install(&tusb_cfg);
         
 	printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
 
 	esp_timer_init();
-    
+
 	do
 	{
 		if( g_SandboxStruct && g_SandboxStruct->idleFunction ) { g_SandboxStruct->idleFunction(); }
