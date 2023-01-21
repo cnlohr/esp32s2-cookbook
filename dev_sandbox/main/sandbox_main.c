@@ -3,7 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
-#include "esp_spi_flash.h"
+#include "spi_flash_mmap.h"
 #include "esp_efuse.h"
 #include "esp_efuse_table.h" // or "esp_efuse_custom_table.h"
 #include "tinyusb.h"
@@ -16,6 +16,7 @@
 #include "soc/soc.h"
 #include "soc/system_reg.h"
 #include "soc/usb_reg.h"
+#include "ulp_riscv.h"
 
 #define SOC_DPORT_USB_BASE 0x60080000
 
@@ -61,7 +62,12 @@ void tud_hid_set_report_cb(uint8_t itf,
 	}
 }
 
-volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay };
+void esp_sleep_enable_timer_wakeup();
+
+volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
+	ulp_riscv_timer_resume, ulp_riscv_timer_stop, ulp_riscv_load_binary,
+	ulp_riscv_run, ulp_riscv_config_and_run, esp_sleep_enable_timer_wakeup,
+	ulp_set_wakeup_period };
 
 void app_main(void)
 {
@@ -86,9 +92,7 @@ void app_main(void)
     tinyusb_config_t tusb_cfg = {};
     tinyusb_driver_install(&tusb_cfg);
         
-	printf("Minimum free heap size: %d bytes\n", esp_get_minimum_free_heap_size());
-
-	esp_timer_init();
+	printf("Minimum free heap size: %d bytes\n", (int)esp_get_minimum_free_heap_size());
 
 	do
 	{

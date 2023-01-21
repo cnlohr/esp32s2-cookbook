@@ -22,6 +22,8 @@
 #include "descriptors_control.h"
 #include "tusb.h"
 #include "tusb_tasks.h"
+#include "soc/soc_caps.h"
+#include "soc/usb_periph.h"
 
 const static char *TAG = "TinyUSB";
 static usb_phy_handle_t phy_hdl;
@@ -38,16 +40,7 @@ esp_err_t tinyusb_driver_install(const tinyusb_config_t *config)
         .otg_mode = USB_OTG_MODE_DEVICE,
     };
     if (config->external_phy) {
-        phy_conf.target = USB_PHY_TARGET_EXT;
-        usb_phy_gpio_conf_t gpio_conf = {
-            .vp_io_num = USBPHY_VP_NUM,
-            .vm_io_num = USBPHY_VM_NUM,
-            .rcv_io_num = USBPHY_RCV_NUM,
-            .oen_io_num = USBPHY_OEN_NUM,
-            .vpo_io_num = USBPHY_VPO_NUM,
-            .vmo_io_num = USBPHY_VMO_NUM,
-        };
-        phy_conf.gpio_conf = &gpio_conf;
+        // Not supported.
     } else {
         phy_conf.target = USB_PHY_TARGET_INT;
     }

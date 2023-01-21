@@ -149,8 +149,10 @@ int main( int argc, char ** argv )
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_rom/include/esp32s2", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/newlib/platform_include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_timer/include", idf_path ); appendcflag( temp );
-			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/include", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/esp_additions/include/freertos/", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/FreeRTOS-Kernel/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/port/xtensa/include", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/FreeRTOS-Kernel/portable/xtensa/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/include/esp_additions/freertos", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/xtensa/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/xtensa/esp32s2/include", idf_path ); appendcflag( temp );
@@ -161,7 +163,10 @@ int main( int argc, char ** argv )
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_hw_support/port", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_hw_support/port/esp32s2/private_include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/hal/platform_port/include", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/ulp/ulp_riscv/include", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/ulp/ulp_common/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_hw_support/port/esp32s2", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/ulp/ulp_common/include/esp32s2", idf_path ); appendcflag( temp );
 
 			appendcflag( "-I../../components" );
 			appendcflag( "-I../../components/hdw-qma6981" );
@@ -185,8 +190,8 @@ int main( int argc, char ** argv )
 			if( r ) { fprintf( stderr, "Error shelling symbols. Error: %d\n", r ); return -6; }
 		}
 
+		FILE * provided = fopen( "build/provided.lds", "w" );
 		{
-			FILE * provided = fopen( "build/provided.lds", "w" );
 			FILE * f = fopen( "build/system_symbols.txt", "r" );
 			if( !f || ferror( f ) )
 			{
@@ -243,10 +248,32 @@ int main( int argc, char ** argv )
 				}
 
 			}
-			fclose( provided );
 			fclose( f );
 		}
+		
+		{
+			FILE *  f = fopen( "build/ulp_program.map", "r" );
+			if( f )
+			{
+				char line[1024];
 
+				while( !feof( f ) )
+				{
+					fgets( line, 1023, f );
+					char addy[128], prop[128], V[128], sec[128], size[128], name[1024];
+					addy[0] = 0; prop[0] = 0; V[0] = 0; sec[0] = 0; size[0] = 0; name[0] = 0;
+					int l = sscanf( line, "%127s %127s %127s %127s %127s %1023s\n", addy, prop, V, sec, size, name );
+					int naddy = strtol( addy, 0, 16 );
+					if( l == 6 && !strstr( sec, "debug" ) && !strchr( name, '.' ) )
+					{
+						fprintf( provided, "PROVIDE( %s = 0x%08x );\n", name, naddy + 0x50000000 );
+					}
+				}
+				fclose( f );
+			}
+		}
+
+		fclose( provided );
 
 		{
 			FILE * lds = fopen( "build/sandbox.lds", "w" );

@@ -4,7 +4,6 @@
 #include "hal/gpio_types.h"
 #include "esp_log.h"
 #include "soc/efuse_reg.h"
-#include "soc/rtc_wdt.h"
 #include "soc/soc.h"
 #include "soc/system_reg.h"
 #include "advanced_usb_control.h"
@@ -27,8 +26,6 @@ static inline uint32_t getCycleCount()
 
 void sandbox_main()
 {
-	
-	
 	uprintf( "sandbox_main()\n" );
 }
 

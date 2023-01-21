@@ -15,6 +15,7 @@
 #include "esp_log.h"
 #include "descriptors_control.h"
 
+bool tusb_desc_set;
 static const char *TAG = "tusb_desc";
 static tusb_desc_device_t s_descriptor;
 static char *s_str_descriptor[USB_STRING_DESCRIPTOR_ARRAY_SIZE];

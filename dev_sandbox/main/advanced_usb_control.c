@@ -5,12 +5,13 @@
 #include "esp_partition.h"
 #include "esp_attr.h"
 #include "esp_system.h"
-#include "esp_spi_flash.h"
+#include "spi_flash_mmap.h"
 #include "esp_log.h"
 #include "rom/cache.h"
 #include "soc/sensitive_reg.h"
 #include "soc/dport_access.h"
-#include "soc/rtc_wdt.h"
+//#include "soc/rtc_wdt.h"
+#include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"  // for WRITE_PERI_REG
 #include <esp_heap_caps.h>
 
