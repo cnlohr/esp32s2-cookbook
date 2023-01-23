@@ -72,6 +72,9 @@ void sandbox_main()
 	SET_PERI_REG_MASK( RTC_CNTL_SLOW_CLK_CONF_REG, RTC_CNTL_ANA_CLK_DIV_VLD );
 
 	rtc_gpio_init( GPIO_NUM_6 );
+	rtc_gpio_init( GPIO_NUM_18 );
+
+    rtc_gpio_set_direction(GPIO_NUM_6, RTC_GPIO_MODE_DISABLED);
 
 	ulp_riscv_halt();
 	uprintf( "sandbox_main()\n" );
