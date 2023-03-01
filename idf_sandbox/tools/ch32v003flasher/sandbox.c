@@ -21,9 +21,9 @@
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
+#define MAX_IN_TIMEOUT 1000
 #include "ch32v003_swio.h"
 
-#define MAX_IN_TIMEOUT 10
 uint32_t t1coeff;
 uint32_t pinmask;
 
@@ -43,7 +43,7 @@ void sandbox_main()
 	switch( m.freq_mhz )
 	{
 	case 240:
-		t1coeff = 10;
+		t1coeff = 9; // 9 or 10 is good.  5 is too low. 13 is sometimes too high.
 		break;
 	default:
 		t1coeff = 100; // Untested At Other Speeds
@@ -70,10 +70,10 @@ void sandbox_tick()
 	int r;
 	uint32_t rval;
 	r = ReadWord32( t1coeff, pinmask, 0x04, &rval ); // 0x04 = DATA0
-	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 //	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
 //	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 	SendWord32( t1coeff, pinmask, 0x04, 0x12349999 ); // Reset Debug Subsystem
+	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 //	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
 	esp_rom_delay_us(1000);
 }

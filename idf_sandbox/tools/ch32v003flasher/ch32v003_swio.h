@@ -56,14 +56,12 @@ static inline int ReadBit( int t1coeff, int pinmask )
 	GPIO.out_w1ts = pinmask;
 	for( i = 1; i < medwait; i++ ) asm volatile( "nop" );
 	ret = GPIO.in;
-	for( timeout = 0; timeout < 10; timeout++ )
+	for( timeout = 0; timeout < MAX_IN_TIMEOUT; timeout++ )
 	{
-		for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 		if( GPIO.in & pinmask )
 		{
 			GPIO.enable_w1ts = pinmask;
 			int fastwait = t1coeff / 2;
-			for( i = 1; i < fastwait; i++ ) asm volatile( "nop" );
 			return !!(ret & pinmask);
 		}
 	}
@@ -91,7 +89,7 @@ static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t valu
 			Send0Bit(t1coeff, pinmask);
 	}
 	EnableISR();
-	esp_rom_delay_us(5);
+	esp_rom_delay_us(4); // Sometimes 2 is too short.
 }
 
 // returns 0 if no error, otherwise error.
@@ -121,7 +119,7 @@ static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * val
 	}
 	*value = rval;
 	EnableISR();
-	esp_rom_delay_us(5);
+	esp_rom_delay_us(4); // Sometimes 2 is too short.
 	return 0;
 }
 
@@ -148,6 +146,8 @@ static inline void ExecuteTimePairs(int t1coeff, int pinmask, const uint16_t * p
 // Returns 2 if there was a bus fault.
 static int DoSongAndDanceToEnterPgmMode(int t1coeff, int pinmask)
 {
+	// XXX UNTESTED UNTESTED!!!!
+
 	static const uint16_t timepairs1[] ={
 		32, 12, //  8.2us / 3.1us
 		36, 12, //  9.2us / 3.1us
