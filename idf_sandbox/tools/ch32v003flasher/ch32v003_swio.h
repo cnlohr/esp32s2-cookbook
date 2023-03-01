@@ -18,11 +18,9 @@ static inline void Send1Bit( int t1coeff, int pinmask )
 	// Low for a nominal period of time.
 	// High for a nominal period of time.
 
-	DisableISR();
 	GPIO.out_w1tc = pinmask;
 	for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 	GPIO.out_w1ts = pinmask;
-	EnableISR();
 	for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 }
 
@@ -34,11 +32,9 @@ static inline void Send0Bit( int t1coeff, int pinmask )
 
 	int i;
 	int longwait = t1coeff*4;
-	DisableISR();
 	GPIO.out_w1tc = pinmask;
 	for( i = 1; i < longwait; i++ ) asm volatile( "nop" );
 	GPIO.out_w1ts = pinmask;
-	EnableISR();
 	for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 }
 
@@ -54,14 +50,12 @@ static inline int ReadBit( int t1coeff, int pinmask )
 	int ret = 0;
 	int i;
 	int medwait = t1coeff * 2;
-	DisableISR();
 	GPIO.out_w1tc = pinmask;
 	for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 	GPIO.enable_w1tc = pinmask;
 	GPIO.out_w1ts = pinmask;
 	for( i = 1; i < medwait; i++ ) asm volatile( "nop" );
 	ret = GPIO.in;
-	EnableISR();
 	for( timeout = 0; timeout < 10; timeout++ )
 	{
 		for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
@@ -78,6 +72,7 @@ static inline int ReadBit( int t1coeff, int pinmask )
 
 static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t value )
 {
+	DisableISR();
 	Send1Bit( t1coeff, pinmask );
 	uint32_t mask;
 	for( mask = 1<<6; mask; mask >>= 1 )
@@ -95,12 +90,14 @@ static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t valu
 		else
 			Send0Bit(t1coeff, pinmask);
 	}
+	EnableISR();
 	esp_rom_delay_us(5);
 }
 
 // returns 0 if no error, otherwise error.
 static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * value )
 {
+	DisableISR();
 	Send1Bit( t1coeff, pinmask );
 	int i;
 	uint32_t mask;
@@ -123,6 +120,7 @@ static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * val
 			return -1;
 	}
 	*value = rval;
+	EnableISR();
 	esp_rom_delay_us(5);
 	return 0;
 }

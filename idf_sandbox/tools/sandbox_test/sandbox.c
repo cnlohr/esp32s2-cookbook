@@ -40,6 +40,6 @@ void sandbox_tick()
 
 struct SandboxStruct sandbox_mode =
 {
-	.idleFunction = sandbox_tick,
+	.fnIdle = sandbox_tick,
 	.fnAdvancedUSB = NULL
 };

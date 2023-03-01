@@ -20,6 +20,7 @@
 #include "driver/rtc_io.h"
 #include "driver/gpio.h"
 #include "rom/gpio.h"
+#include "soc/rtc.h"
 
 #define SOC_DPORT_USB_BASE 0x60080000
 
@@ -71,7 +72,9 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
 	ulp_riscv_timer_resume, ulp_riscv_timer_stop, ulp_riscv_load_binary,
 	ulp_riscv_run, ulp_riscv_config_and_run, esp_sleep_enable_timer_wakeup,
 	ulp_set_wakeup_period, rtc_gpio_init, rtc_gpio_set_direction,
-	rtc_gpio_set_level, gpio_config, gpio_matrix_out, gpio_matrix_in };
+	rtc_gpio_set_level, gpio_config, gpio_matrix_out, gpio_matrix_in,
+	rtc_clk_cpu_freq_get_config, rtc_clk_cpu_freq_set_config_fast,
+	rtc_clk_apb_freq_get };
 
 void app_main(void)
 {

@@ -16,11 +16,12 @@
 #include "soc/dport_access.h"
 #include "soc/gpio_sig_map.h"
 #include "soc/rtc.h"
+#include "freertos/portmacro.h"
 
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
-#include "ch32v003_sdio.h"
+#include "ch32v003_swio.h"
 
 #define MAX_IN_TIMEOUT 10
 uint32_t t1coeff;
@@ -68,13 +69,13 @@ void sandbox_tick()
 {
 	int r;
 	uint32_t rval;
-	r = ReadWord32( t1coeff, pinmask, 0x04, &rval ); // 
-	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
-	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
-	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
+	r = ReadWord32( t1coeff, pinmask, 0x04, &rval ); // 0x04 = DATA0
+	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
+//	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
+//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 	SendWord32( t1coeff, pinmask, 0x04, 0x12349999 ); // Reset Debug Subsystem
-	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
-	esp_rom_delay_us(5000);
+//	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
+	esp_rom_delay_us(1000);
 }
 
 struct SandboxStruct sandbox_mode =
