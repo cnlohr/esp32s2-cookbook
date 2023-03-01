@@ -21,7 +21,8 @@ static int DoSongAndDanceToEnterPgmMode(int t1coeff, int pinmask);
 static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t value );
 static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * value );
 
-// TODO: Add continuation functions.
+// TODO: Add continuation (bypass) functions.
+// TODO: Consider adding parity bit (though it seems rather useless)
 
 
 // All three bit functions assume bus state will be in

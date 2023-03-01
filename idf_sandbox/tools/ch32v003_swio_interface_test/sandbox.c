@@ -50,7 +50,7 @@ void sandbox_main()
 		break;
 	}
 
-	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
+//	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
 	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
 	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
 
