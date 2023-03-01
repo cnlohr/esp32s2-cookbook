@@ -1,11 +1,28 @@
-// XXX UNTESTED XXX PLEASE DO NOT TRY OUT.
+// CH32V003 SWIO minimal reference implementation for bit banged IO
+// on the ESP32-S2.
+//
+// Copyright 2023 Charles Lohr, May be licensed under the MIT/x11 or NewBSD
+// licenses.  You choose.  (Can be included in commercial and copyleft work)
+//
+// This file is original work.
+//
+// Mostly tested, though, not perfect.  Expect to tweak some things.
+// DoSongAndDanceToEnterPgmMode is almost completely untested.
+// This is the weird song-and-dance that the WCH LinkE does when
+// connecting to a CH32V003 part with unknown state.  This is probably
+// incorrect, but isn't really needed unless things get really cursed.
 
 #ifndef _CH32V003_DEBUGGER_H
 #define _CH32V003_DEBUGGER_H
 
+// You should interface to this file via these functions
+
 static int DoSongAndDanceToEnterPgmMode(int t1coeff, int pinmask);
 static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t value );
 static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * value );
+
+// TODO: Add continuation functions.
+
 
 // All three bit functions assume bus state will be in
 // 	GPIO.out_w1ts = pinmask;
@@ -70,6 +87,9 @@ static inline int ReadBit( int t1coeff, int pinmask )
 
 static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t value )
 {
+ 	GPIO.out_w1ts = pinmask;
+	GPIO.enable_w1ts = pinmask;
+
 	DisableISR();
 	Send1Bit( t1coeff, pinmask );
 	uint32_t mask;
@@ -95,6 +115,9 @@ static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t valu
 // returns 0 if no error, otherwise error.
 static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * value )
 {
+ 	GPIO.out_w1ts = pinmask;
+	GPIO.enable_w1ts = pinmask;
+
 	DisableISR();
 	Send1Bit( t1coeff, pinmask );
 	int i;
