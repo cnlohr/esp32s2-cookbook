@@ -115,10 +115,12 @@ int uprintf( const char * fmt, ... );
 struct SandboxStruct
 {	
 	int (*fnAdvancedUSB)( uint8_t * buffer, int reqlen, int is_get );
-	void (*idleFunction)( );
+	void (*fnIdle)( );
+	void (*fnDecom)( );
 };
 
-extern struct SandboxStruct sandbox_mode;
+extern struct SandboxStruct * g_SandboxStruct;
+
 
 #endif
 

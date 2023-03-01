@@ -73,6 +73,7 @@ int main( int argc, char ** argv )
 
 	do
 	{
+		printf( "RELOOP\n" );
 		// First, get the current size/etc. of the memory allocated for us.
 		rdata[0] = 170;
 		rdata[1] = 8;
@@ -94,13 +95,13 @@ int main( int argc, char ** argv )
 		} while ( r < 10 );
 		allocated_addy = ((uint32_t*)(rdata+0))[0];
 		allocated_size = ((uint32_t*)(rdata+0))[1];
+		printf( "ALLOCA %p %p\n", allocated_addy, allocated_size );
 
 		if( allocated_addy == 0 )
 		{
 			// Use a dummy size
 			allocated_addy = 0x3ffb0000;
 		}
-
 
 		// Get version
 		rdata[0] = 170;
@@ -169,8 +170,10 @@ int main( int argc, char ** argv )
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/esp_hw_support/port/esp32s2", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/ulp/ulp_common/include/esp32s2", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/ulp/ulp_fsm/include/esp32s2", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/soc/esp32s2/include/soc", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components", idf_path ); appendcflag( temp );
 
+			appendcflag( "-I." );
 			appendcflag( "-I../../components" );
 			appendcflag( "-I../../components/hdw-qma6981" );
 			appendcflag( "-I../../main/display" );
@@ -405,7 +408,7 @@ int main( int argc, char ** argv )
 			fclose( f );
 		}
 
-		int total_segment_size = data_segment_end - data_segment_origin + sandbox_bss_size;
+		int total_segment_size = data_segment_end - data_segment_origin + sandbox_bss_size + 16;
 		printf( "Data: %d bytes\n", data_segment_start - data_segment_origin );
 		printf( "Data: %d bytes\n", data_segment_end - data_segment_start );
 		printf( "BSS: %d\n", sandbox_bss_size );

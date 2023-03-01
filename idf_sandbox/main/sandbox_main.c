@@ -18,6 +18,8 @@
 #include "soc/usb_reg.h"
 #include "ulp_riscv.h"
 #include "driver/rtc_io.h"
+#include "driver/gpio.h"
+#include "rom/gpio.h"
 
 #define SOC_DPORT_USB_BASE 0x60080000
 
@@ -69,7 +71,7 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
 	ulp_riscv_timer_resume, ulp_riscv_timer_stop, ulp_riscv_load_binary,
 	ulp_riscv_run, ulp_riscv_config_and_run, esp_sleep_enable_timer_wakeup,
 	ulp_set_wakeup_period, rtc_gpio_init, rtc_gpio_set_direction,
-	rtc_gpio_set_level };
+	rtc_gpio_set_level, gpio_config, gpio_matrix_out, gpio_matrix_in };
 
 void app_main(void)
 {
@@ -98,10 +100,11 @@ void app_main(void)
 
 	do
 	{
-		if( g_SandboxStruct && g_SandboxStruct->idleFunction ) { g_SandboxStruct->idleFunction(); }
+		if( g_SandboxStruct && g_SandboxStruct->fnIdle ) { g_SandboxStruct->fnIdle(); }
 		esp_task_wdt_reset();
 		taskYIELD();
 	} while( 1 );
+
 //	printf("Restarting now.\n");
 //	fflush(stdout);
 //	esp_restart();
