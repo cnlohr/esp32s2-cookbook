@@ -29,10 +29,10 @@ uint32_t pinmask;
 
 void sandbox_main()
 {
-	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 2<<FUN_DRV_S );  //Additional pull-up, 10mA drive.
+	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.
 	//GPIO5 is wired to pullup.
-	GPIO.out_w1ts = 1<<5;
-	GPIO.enable_w1ts = 1<<5;
+	//GPIO.out_w1ts = 1<<5;
+	//GPIO.enable_w1ts = 1<<5;
 
 	pinmask = 1<<6;
 	GPIO.out_w1ts = pinmask;
@@ -75,7 +75,7 @@ void sandbox_tick()
 	SendWord32( t1coeff, pinmask, 0x04, 0x12349999 ); // Reset Debug Subsystem
 	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 //	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
-	esp_rom_delay_us(1000);
+	esp_rom_delay_us(100);
 }
 
 struct SandboxStruct sandbox_mode =

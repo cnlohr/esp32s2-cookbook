@@ -15,6 +15,12 @@
 #ifndef _CH32V003_DEBUGGER_H
 #define _CH32V003_DEBUGGER_H
 
+// This is a hacky thing, but if you are laaaaazzzyyyy and don't want to add a 10k
+// resistor, youcan do this.  It glitches the line high very, very briefly.  
+// Enable for when you don't have a 10k pull-upand are relying on the internal pull-up.
+// WARNING: If you set this, you should set the drive current to 5mA.
+#define R_GLITCH_HIGH
+
 // You should interface to this file via these functions
 
 static int DoSongAndDanceToEnterPgmMode(int t1coeff, int pinmask);
@@ -72,8 +78,26 @@ static inline int ReadBit( int t1coeff, int pinmask )
 	for( i = 1; i < t1coeff; i++ ) asm volatile( "nop" );
 	GPIO.enable_w1tc = pinmask;
 	GPIO.out_w1ts = pinmask;
+#ifdef R_GLITCH_HIGH
+	int halfwait = t1coeff / 2;
+	for( i = 1; i < halfwait; i++ ) asm volatile( "nop" );
+	GPIO.enable_w1ts = pinmask;
+	GPIO.enable_w1tc = pinmask;
+	for( i = 1; i < halfwait; i++ ) asm volatile( "nop" );
+#else
 	for( i = 1; i < medwait; i++ ) asm volatile( "nop" );
+#endif
 	ret = GPIO.in;
+
+#ifdef R_GLITCH_HIGH
+	if( !(ret & pinmask) )
+	{
+		// Wait if still low.
+		for( i = 1; i < medwait; i++ ) asm volatile( "nop" );
+		GPIO.enable_w1ts = pinmask;
+		GPIO.enable_w1tc = pinmask;
+	}
+#endif
 	for( timeout = 0; timeout < MAX_IN_TIMEOUT; timeout++ )
 	{
 		if( GPIO.in & pinmask )
