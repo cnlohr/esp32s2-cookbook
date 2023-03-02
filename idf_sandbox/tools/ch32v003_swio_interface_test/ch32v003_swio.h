@@ -27,6 +27,17 @@ static int DoSongAndDanceToEnterPgmMode(int t1coeff, int pinmask);
 static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t value );
 static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * value );
 
+#define CDMCONTROL  0x10
+#define CDMSTATUS   0x11
+#define CDATA0      0x4
+#define CDATA1      0x5
+#define CHARTINFO   0x12
+#define CABSTRACTCS 0x16
+#define CCOMMAND    0x17
+#define CABSTRACTAUTO 0x18
+#define CPROGBUF0   0x20
+#define CHALTSUM0   0x40
+
 // TODO: Add continuation (bypass) functions.
 // TODO: Consider adding parity bit (though it seems rather useless)
 

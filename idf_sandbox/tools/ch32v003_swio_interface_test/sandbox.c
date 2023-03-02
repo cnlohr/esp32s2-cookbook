@@ -58,9 +58,12 @@ void sandbox_main()
 	int r = ReadWord32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
 	uprintf( "CPBR: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 	
-	SendWord32( t1coeff, pinmask, 0x10, 0 ); // Reset Debug Subsystem
-	SendWord32( t1coeff, pinmask, 0x10, 1 ); // Reset Debug Subsystem
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
 
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
+	
 	r = ReadWord32( t1coeff, pinmask, 0x11, &rval ); // 
 	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 }
@@ -69,11 +72,14 @@ void sandbox_tick()
 {
 	int r;
 	uint32_t rval;
-	r = ReadWord32( t1coeff, pinmask, 0x04, &rval ); // 0x04 = DATA0
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
+	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
+	r = ReadWord32( t1coeff, pinmask, CDATA0, &rval ); // 0x04 = DATA0
 //	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
 //	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-	SendWord32( t1coeff, pinmask, 0x04, 0x12349999 ); // Reset Debug Subsystem
-	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
+	SendWord32( t1coeff, pinmask, CDATA0, 0x12349999 ); // Reset Debug Subsystem
+//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 //	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
 	esp_rom_delay_us(100);
 }
