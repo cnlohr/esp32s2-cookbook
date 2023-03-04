@@ -115,9 +115,13 @@ static inline int ReadBit( int t1coeff, int pinmask )
 		{
 			GPIO.enable_w1ts = pinmask;
 			int fastwait = t1coeff / 2;
+			for( i = 1; i < fastwait; i++ ) asm volatile( "nop" );
 			return !!(ret & pinmask);
 		}
 	}
+	
+	// Force high anyway so, though hazarded, we can still move along.
+	GPIO.enable_w1ts = pinmask;
 	return 2;
 }
 
@@ -145,7 +149,7 @@ static void SendWord32( int t1coeff, int pinmask, uint8_t command, uint32_t valu
 			Send0Bit(t1coeff, pinmask);
 	}
 	EnableISR();
-	esp_rom_delay_us(4); // Sometimes 2 is too short.
+	esp_rom_delay_us(5); // Sometimes 2 is too short.
 }
 
 // returns 0 if no error, otherwise error.
@@ -174,11 +178,14 @@ static int ReadWord32( int t1coeff, int pinmask, uint8_t command, uint32_t * val
 		if( r == 1 )
 			rval |= 1;
 		if( r == 2 )
+		{
+			EnableISR();
 			return -1;
+		}
 	}
 	*value = rval;
 	EnableISR();
-	esp_rom_delay_us(4); // Sometimes 2 is too short.
+	esp_rom_delay_us(5); // Sometimes 2 is too short.
 	return 0;
 }
 

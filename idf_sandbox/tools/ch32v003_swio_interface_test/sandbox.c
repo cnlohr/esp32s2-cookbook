@@ -25,18 +25,26 @@
 #include "ch32v003_swio.h"
 
 uint32_t t1coeff;
-uint32_t pinmask;
+uint32_t pinmask, pinmaskpower;
+uint8_t retbuff[256];
+uint8_t * retbuffptr = 0;
 
 void sandbox_main()
 {
-	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.
-	//GPIO5 is wired to pullup.
-	//GPIO.out_w1ts = 1<<5;
-	//GPIO.enable_w1ts = 1<<5;
+	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
+	REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
+
+	retbuffptr = retbuff;
 
 	pinmask = 1<<6;
+	pinmaskpower = 1<<7;
+
+	GPIO.out_w1ts = pinmaskpower;
+	GPIO.enable_w1ts = pinmaskpower;
 	GPIO.out_w1ts = pinmask;
 	GPIO.enable_w1ts = pinmask;
+
+	esp_rom_delay_us(5000);
 
 	rtc_cpu_freq_config_t m;
 	rtc_clk_cpu_freq_get_config( &m );
@@ -50,6 +58,8 @@ void sandbox_main()
 		break;
 	}
 
+
+#if 1
 //	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
 	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
 	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
@@ -58,34 +68,133 @@ void sandbox_main()
 	int r = ReadWord32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
 	uprintf( "CPBR: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 	
+	#if 0
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
+	#endif
 	
 	r = ReadWord32( t1coeff, pinmask, 0x11, &rval ); // 
 	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
+#endif
+
+}
+
+void teardown()
+{
+	// Power-Down
+	GPIO.out_w1tc = 1<<6;
+	GPIO.out_w1ts = 1<<6;
+	GPIO.out_w1tc = 1<<7;
 }
 
 void sandbox_tick()
 {
-	int r;
-	uint32_t rval;
+/*
+	uint32_t rval = 0;
+	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
+	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
+
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-	r = ReadWord32( t1coeff, pinmask, CDATA0, &rval ); // 0x04 = DATA0
+
+//	esp_rom_delay_us(100);
+//	r = ReadWord32( t1coeff, pinmask, CDATA0, &rval );
+//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
+	r = ReadWord32( t1coeff, pinmask, CDMSTATUS, &rval );
+//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
+
+//	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
 //	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
 //	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-	SendWord32( t1coeff, pinmask, CDATA0, 0x12349999 ); // Reset Debug Subsystem
+//	SendWord32( t1coeff, pinmask, CDATA0, 0x12349999 ); // Reset Debug Subsystem
 //	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
 //	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
+//	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x00000001 ); // Initiate a halt request.
+*/
 	esp_rom_delay_us(100);
+}
+
+int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
+{
+	uprintf( "FEATURE: %02x %d %d\n", buffer[0], reqlen, is_get );
+	if( is_get )
+	{
+		int len = retbuffptr - retbuff;
+		buffer[0] = len;
+		if( len > reqlen-1 ) len = reqlen-1;
+		memcpy( buffer+1, retbuff, len );
+		retbuffptr = retbuff;
+		uprintf( "RETRN: %d %p %p\n", len, retbuffptr, retbuff );
+		return len+1;
+	}
+	
+	// Is send.
+	// buffer[0] is the request ID.
+	uint8_t * iptr = &buffer[1];
+	while( iptr - buffer < reqlen )
+	{
+		uint8_t cmd = *(iptr++);
+		int remain = reqlen - (iptr - buffer);
+		uprintf( "CMD: %02x\n", cmd );
+		switch( cmd )
+		{
+		case 0x83: // We will never write to 0x41.
+			DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
+			break;
+
+		case 0x85:
+			// Power-down 
+			GPIO.enable_w1tc = pinmaskpower;
+			GPIO.out_w1tc = pinmask;
+			GPIO.enable_w1ts = pinmask;
+			break;
+
+		case 0x87: 
+			// Power-up
+			GPIO.out_w1ts = pinmaskpower;
+			GPIO.enable_w1ts = pinmaskpower;
+			GPIO.out_w1ts = pinmask;
+			GPIO.enable_w1ts = pinmask;
+		break;
+
+		case 0xff:
+			iptr = buffer + reqlen;
+			break;
+
+		// Otherwise it's a regular command.
+		// 7-bit-cmd .. 1-bit read(0) or write(1) 
+		default:
+		{
+			if( cmd & 1 )
+			{
+				if( remain >= 5 )
+				{
+					SendWord32( t1coeff, pinmask, iptr[0], iptr[1] | (iptr[2]<<8) | (iptr[3]<<16) | (iptr[4]<<24) );
+					iptr += 5;
+				}	
+			}
+			else
+			{
+				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 5 )
+				{
+					retbuffptr[0] = ReadWord32( t1coeff, pinmask, iptr[1], (uint32_t*)&retbuffptr[1] );
+					iptr++;
+					retbuffptr += 5;
+				}
+			}
+			// if command lines up to a normal QingKeV2 debug command, treat it as that command.
+		}		
+		}
+	}
+
+	return 0;
 }
 
 struct SandboxStruct sandbox_mode =
 {
 	.fnIdle = sandbox_tick,
-	.fnAdvancedUSB = NULL
+	.fnDecom = teardown,
+	.fnAdvancedUSB = ch32v003_usb_feature_report
 };
