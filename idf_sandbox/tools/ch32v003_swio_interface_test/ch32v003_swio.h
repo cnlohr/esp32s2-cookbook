@@ -12,8 +12,8 @@
 // connecting to a CH32V003 part with unknown state.  This is probably
 // incorrect, but isn't really needed unless things get really cursed.
 
-#ifndef _CH32V003_DEBUGGER_H
-#define _CH32V003_DEBUGGER_H
+#ifndef _CH32V003_SWIO_H
+#define _CH32V003_SWIO_H
 
 // This is a hacky thing, but if you are laaaaazzzyyyy and don't want to add a 10k
 // resistor, youcan do this.  It glitches the line high very, very briefly.  

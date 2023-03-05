@@ -59,7 +59,7 @@ void sandbox_main()
 	}
 
 
-#if 1
+#if 0
 //	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
 	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
 	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
@@ -95,7 +95,6 @@ void sandbox_tick()
 	uint32_t rval = 0;
 	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
 	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
-
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
 	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
 
@@ -113,12 +112,11 @@ void sandbox_tick()
 //	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
 //	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x00000001 ); // Initiate a halt request.
 */
-	esp_rom_delay_us(100);
+	//esp_rom_delay_us(100);
 }
 
 int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 {
-	uprintf( "FEATURE: %02x %d %d\n", buffer[0], reqlen, is_get );
 	if( is_get )
 	{
 		int len = retbuffptr - retbuff;
@@ -126,7 +124,6 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 		if( len > reqlen-1 ) len = reqlen-1;
 		memcpy( buffer+1, retbuff, len );
 		retbuffptr = retbuff;
-		uprintf( "RETRN: %d %p %p\n", len, retbuffptr, retbuff );
 		return len+1;
 	}
 	
@@ -137,55 +134,61 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 	{
 		uint8_t cmd = *(iptr++);
 		int remain = reqlen - (iptr - buffer);
-		uprintf( "CMD: %02x\n", cmd );
-		switch( cmd )
+		if( cmd == 0xfe ) // We will never write to 0x7f.
 		{
-		case 0x83: // We will never write to 0x41.
-			DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
-			break;
-
-		case 0x85:
-			// Power-down 
-			GPIO.enable_w1tc = pinmaskpower;
-			GPIO.out_w1tc = pinmask;
-			GPIO.enable_w1ts = pinmask;
-			break;
-
-		case 0x87: 
-			// Power-up
-			GPIO.out_w1ts = pinmaskpower;
-			GPIO.enable_w1ts = pinmaskpower;
-			GPIO.out_w1ts = pinmask;
-			GPIO.enable_w1ts = pinmask;
-		break;
-
-		case 0xff:
-			iptr = buffer + reqlen;
-			break;
-
-		// Otherwise it's a regular command.
-		// 7-bit-cmd .. 1-bit read(0) or write(1) 
-		default:
+			cmd = *(iptr++);
+			switch( cmd )
+			{
+			case 0x01:
+				DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
+				break;
+			case 0x02: // Power-down 
+				uprintf( "Power down\n" );
+				GPIO.out_w1tc = pinmaskpower;
+				GPIO.enable_w1ts = pinmaskpower;
+				GPIO.out_w1tc = pinmask;
+				GPIO.enable_w1ts = pinmask;
+				break;
+			case 0x03: // Power-up
+				GPIO.out_w1ts = pinmaskpower;
+				GPIO.enable_w1ts = pinmaskpower;
+				GPIO.out_w1ts = pinmask;
+				GPIO.enable_w1ts = pinmask;
+				break;
+			case 0x04: // Delay( uint16_t us )
+				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
+				iptr += 2;
+				break;
+			}
+		} else if( cmd == 0xff )
 		{
+			break;
+		}
+		else
+		{
+			// Otherwise it's a regular command.
+			// 7-bit-cmd .. 1-bit read(0) or write(1) 
+			// if command lines up to a normal QingKeV2 debug command, treat it as that command.
+
 			if( cmd & 1 )
 			{
-				if( remain >= 5 )
+				if( remain >= 4 )
 				{
-					SendWord32( t1coeff, pinmask, iptr[0], iptr[1] | (iptr[2]<<8) | (iptr[3]<<16) | (iptr[4]<<24) );
-					iptr += 5;
-				}	
+					SendWord32( t1coeff, pinmask, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
+					iptr += 4;
+				}
 			}
 			else
 			{
-				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 5 )
+				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 4 )
 				{
-					retbuffptr[0] = ReadWord32( t1coeff, pinmask, iptr[1], (uint32_t*)&retbuffptr[1] );
-					iptr++;
+					int r = ReadWord32( t1coeff, pinmask, cmd>>1, (uint32_t*)&retbuffptr[1] );
+					retbuffptr[0] = r;
+					if( r < 0 )
+						*((uint32_t*)&retbuffptr[1]) = 0;
 					retbuffptr += 5;
 				}
 			}
-			// if command lines up to a normal QingKeV2 debug command, treat it as that command.
-		}		
 		}
 	}
 
