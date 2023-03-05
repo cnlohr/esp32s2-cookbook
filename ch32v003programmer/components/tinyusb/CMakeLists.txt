@@ -27,7 +27,6 @@ if(CONFIG_TINYUSB)
     idf_component_get_property(freertos_component_dir freertos COMPONENT_DIR)
 
     list(APPEND includes_private
-        "tinyusb/hw/bsp/"
         "tinyusb/src/"
         "tinyusb/src/device"
         "additions/include_private"
