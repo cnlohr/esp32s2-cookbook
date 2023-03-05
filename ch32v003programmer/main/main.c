@@ -76,23 +76,17 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
 	rtc_clk_cpu_freq_get_config, rtc_clk_cpu_freq_set_config_fast,
 	rtc_clk_apb_freq_get };
 
+extern struct SandboxStruct sandbox_mode;
+
 void app_main(void)
 {
 	printf("Hello world! Keep table at %p\n", &keep_symbols );
 
+
+	g_SandboxStruct = &sandbox_mode;
+
 	esp_log_set_vprintf( advanced_usb_write_log_printf );
-	
-	/* The ESP32-C3 can enumerate as a USB CDC device using pins 18 and 19
-	 * https://docs.espressif.com/projects/esp-idf/en/latest/esp32c3/api-guides/usb-serial-jtag-console.html
-	 *
-	 * This is enabled or disabled with idf.py menuconfig -> "Channel for console output"
-	 *
-	 * When USB JTAG is enabled, the ESP32-C3 will halt and wait for a reception
-	 * any time it tries to transmit bytes on the UART. This means a program
-	 * won't run if a console isn't open, because the IDF tries to print stuff
-	 * on boot.
-	 * To get around this, use the efuse bit to permanently disable logging
-	 */
+
 	// esp_efuse_set_rom_log_scheme(ESP_EFUSE_ROM_LOG_ALWAYS_OFF);
 	esp_efuse_set_rom_log_scheme(ESP_EFUSE_ROM_LOG_ALWAYS_ON);
 
@@ -100,6 +94,10 @@ void app_main(void)
     tinyusb_driver_install(&tusb_cfg);
         
 	printf("Minimum free heap size: %d bytes\n", (int)esp_get_minimum_free_heap_size());
+
+	void sandbox_main();
+
+	sandbox_main();
 
 	do
 	{
