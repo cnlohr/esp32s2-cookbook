@@ -165,6 +165,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				if( remain >= 9 )
 				{
 					int r = WriteWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24),  iptr[4] | (iptr[5]<<8) | (iptr[6]<<16) | (iptr[7]<<24) );
+					iptr += 8;
 					*(retbuffptr++) = r;
 				}
 				break;
@@ -182,6 +183,17 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				}
 				break;
 			}
+			case 0x0a: // Read Data32.
+				ResetInternalProgrammingState( &state );
+				break;
+			case 0x0b:
+				if( remain >= 68 )
+				{
+					int r = Write64Block( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint8_t*)&iptr[4] );
+					iptr += 68;
+					*(retbuffptr++) = r;
+				}
+
 			}
 		} else if( cmd == 0xff )
 		{

@@ -33,6 +33,7 @@ struct SWIOState
 	uint32_t statetag;
 	uint32_t lastwriteflags;
 	uint32_t currentstateval;
+	uint32_t flash_unlocked;
 };
 
 #define STTAG( x ) (*((uint32_t*)(x)))
@@ -42,10 +43,15 @@ struct SWIOState
 static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state );
 static void WriteReg32( struct SWIOState * state, uint8_t command, uint32_t value ) IRAM;
 static int ReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value ) IRAM;
+
+// More advanced functions built on lower level PHY.
 static int ReadWord( struct SWIOState * state, uint32_t word, uint32_t * ret );
 static int WriteWord( struct SWIOState * state, uint32_t word, uint32_t val );
 static int WaitForFlash( struct SWIOState * state );
 static int WaitForDoneOp( struct SWIOState * state );
+static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint8_t * data );
+static int UnlockFlash( struct SWIOState * iss );
+static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length, int type );
 
 
 #define DMDATA0        0x04
@@ -71,9 +77,13 @@ static int WaitForDoneOp( struct SWIOState * state );
 
 
 
-#define FLASH_STATR_WRPRTERR                    ((uint8_t)0x10) 
+#define FLASH_STATR_WRPRTERR       ((uint8_t)0x10) 
 #define CR_PAGE_PG                 ((uint32_t)0x00010000)
 #define CR_BUF_LOAD                ((uint32_t)0x00040000)
+#define FLASH_CTLR_MER             ((uint16_t)0x0004)     /* Mass Erase */
+#define CR_STRT_Set                ((uint32_t)0x00000040)
+#define CR_PAGE_ER                 ((uint32_t)0x00020000)
+#define CR_BUF_RST                 ((uint32_t)0x00080000)
 
 static inline void Send1Bit( int t1coeff, int pinmask ) IRAM;
 static inline void Send0Bit( int t1coeff, int pinmask ) IRAM;
@@ -364,47 +374,69 @@ static int WaitForDoneOp( struct SWIOState * iss )
 	return ret;
 }
 
+static void StaticUpdatePROGBUFRegs( struct SWIOState * dev )
+{
+	WriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
+	WriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
+	WriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
+	WriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
+	WriteReg32( dev, DMDATA0, 0x40022010 ); //FLASH->CTLR
+	WriteReg32( dev, DMCOMMAND, 0x0023100c ); // Copy data to x12
+	WriteReg32( dev, DMDATA0, CR_PAGE_PG|CR_BUF_LOAD);
+	WriteReg32( dev, DMCOMMAND, 0x0023100d ); // Copy data to x13
+}
+
+static void ResetInternalProgrammingState( struct SWIOState * iss )
+{
+	iss->statetag = 0;
+	iss->lastwriteflags = 0;
+	iss->currentstateval = 0;
+	iss->flash_unlocked = 0;
+}
+
 static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t * data )
 {
 	struct SWIOState * dev = iss;
-	int ret = 0;
 
 	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval )
 	{
 		if( iss->statetag != STTAG( "RDSQ" ) )
 		{
 			WriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
-			WriteReg32( dev, DMPROGBUF0, 0x00052283 ); // lw x5,0(x10)
-			WriteReg32( dev, DMPROGBUF1, 0x0002a303 ); // lw x6,0(x5)
-			WriteReg32( dev, DMPROGBUF2, 0x00428293 ); // addi x5, x5, 4
-			WriteReg32( dev, DMPROGBUF3, 0x0065a023 ); // sw x6,0(x11) // Write back to DATA0
-			WriteReg32( dev, DMPROGBUF4, 0x00552023 ); // sw x5,0(x10) // Write addy to DATA1
-			WriteReg32( dev, DMPROGBUF5, 0x00100073 ); // ebreak
 
-			WriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
-			WriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
-			WriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
-			WriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
+			// c.lw x8,0(x11) // Pull the address from DATA1
+			// c.lw x9,0(x8)  // Read the data at that location.
+			WriteReg32( dev, DMPROGBUF0, 0x40044180 );
+			// c.addi x8, 4
+			// c.sw x9, 0(x10) // Write back to DATA0
+			WriteReg32( dev, DMPROGBUF1, 0xc1040411 );
+			// c.sw x8, 0(x11) // Write addy to DATA1
+			// c.ebreak
+			WriteReg32( dev, DMPROGBUF2, 0x9002c180 );
+
+			if( iss->statetag != STTAG( "WRSQ" ) )
+			{
+				StaticUpdatePROGBUFRegs( dev );
+			}
 			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
 
 		WriteReg32( dev, DMDATA1, address_to_read );
 		WriteReg32( dev, DMCOMMAND, 0x00241000 ); // Only execute.
 
-		WaitForDoneOp( dev );
 		iss->statetag = STTAG( "RDSQ" );
-		ret |= iss->currentstateval = address_to_read;
+		iss->currentstateval = address_to_read;
+
+		WaitForDoneOp( dev );
 	}
 
 	iss->currentstateval += 4;
 
-	return ret | ReadReg32( dev, DMDATA0, data );
-
+	return ReadReg32( dev, DMDATA0, data );
 }
 
 static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_t data )
 {
-	// Synonyms here.
 	struct SWIOState * dev = iss;
 
 	int ret = 0;
@@ -418,45 +450,57 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 
 	if( iss->statetag != STTAG( "WRSQ" ) || is_flash != iss->lastwriteflags )
 	{
-		WriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
-
-		// Different address, so we don't need to re-write all the program regs.
-		WriteReg32( dev, DMPROGBUF0, 0x00032283 ); // lw x5,0(x6)
-		WriteReg32( dev, DMPROGBUF1, 0x0072a023 ); // sw x7,0(x5)
-		WriteReg32( dev, DMPROGBUF2, 0x00428293 ); // addi x5, x5, 4
-		WriteReg32( dev, DMPROGBUF3, 0x00532023 ); // sw x5,0(x6)
-		if( is_flash )
+		int did_disable_req = 0;
+		if( iss->statetag != STTAG( "WRSQ" ) )
 		{
-			// After writing to memory, also hit up page load flag.
-			WriteReg32( dev, DMPROGBUF4, 0x00942023 ); // sw x9,0(x8)
-			WriteReg32( dev, DMPROGBUF5, 0x00100073 ); // ebreak
+			WriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
+			did_disable_req = 1;
+			// Different address, so we don't need to re-write all the program regs.
+			// c.lw x9,0(x11) // Get the address to write to. 
+			// c.sw x8,0(x9)  // Write to the address.
+			WriteReg32( dev, DMPROGBUF0, 0xc0804184 );
+			// c.addi x9, 4
+			// c.sw x9,0(x11)
+			WriteReg32( dev, DMPROGBUF1, 0xc1840491 );
 
-			WriteReg32( dev, DMDATA0, 0x40022010 ); // (intptr_t)&FLASH->CTLR
-			WriteReg32( dev, DMCOMMAND, 0x00231008 ); // Copy data to x8
-			WriteReg32( dev, DMDATA0, CR_PAGE_PG|CR_BUF_LOAD);
-			WriteReg32( dev, DMCOMMAND, 0x00231009 ); // Copy data to x9
-		}
-		else
-		{
-			WriteReg32( dev, DMPROGBUF4, 0x00100073 ); // ebreak
+			if( iss->statetag != STTAG( "RDSQ" ) )
+			{
+				StaticUpdatePROGBUFRegs( dev );
+			}
 		}
 
-
-		WriteReg32( dev, DMDATA0, 0xe00000f8); // Address of DATA1.
-		WriteReg32( dev, DMCOMMAND, 0x00231006 ); // Location of DATA1 to x6
-
-		iss->lastwriteflags = is_flash;
+		if( iss->lastwriteflags != is_flash || iss->statetag != STTAG( "WRSQ" ) )
+		{
+			// If we are doing flash, we have to ack, otherwise we don't want to ack.
+			if( is_flash )
+			{
+				// After writing to memory, also hit up page load flag.
+				// c.sw x13,0(x12) // Acknowledge the page write.
+				// c.ebreak
+				WriteReg32( dev, DMPROGBUF2, 0x9002c214 );
+			}
+			else
+			{
+				WriteReg32( dev, DMPROGBUF2, 0x00019002 ); // c.ebreak
+			}
+		}
 
 		WriteReg32( dev, DMDATA1, address_to_write );
+		WriteReg32( dev, DMDATA0, data );
+
+		if( did_disable_req )
+		{
+			WriteReg32( dev, DMCOMMAND, 0x00271008 ); // Copy data to x8, and execute program.
+			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+		}
+		iss->lastwriteflags = is_flash;
+
 
 		iss->statetag = STTAG( "WRSQ" );
 		iss->currentstateval = address_to_write;
 
-		WriteReg32( dev, DMDATA0, data );
-		WriteReg32( dev, DMCOMMAND, 0x00271007 ); // Copy data to x7, and execute program.
-		WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
-
-		if( WaitForDoneOp( dev ) ) return -3;
+		if( is_flash )
+			ret |= WaitForDoneOp( dev );
 	}
 	else
 	{
@@ -467,11 +511,171 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
 		WriteReg32( dev, DMDATA0, data );
-		if( WaitForDoneOp( dev ) ) return -4;
+		if( is_flash )
+		{
+			// XXX TODO: This likely can be a very short delay.
+			// XXX POSSIBLE OPTIMIZATION REINVESTIGATE.
+			ret |= WaitForDoneOp( dev );
+		}
+		else
+		{
+			ret |= WaitForDoneOp( dev );
+		}
 	}
 
+
 	iss->currentstateval += 4;
-	return ret;
+
+	return 0;
+}
+
+static int UnlockFlash( struct SWIOState * iss )
+{
+	struct SWIOState * dev = iss;
+
+	uint32_t rw;
+	ReadWord( dev, 0x40022010, &rw );  // FLASH->CTLR = 0x40022010
+	if( rw & 0x8080 ) 
+	{
+
+		WriteWord( dev, 0x40022004, 0x45670123 ); // FLASH->KEYR = 0x40022004
+		WriteWord( dev, 0x40022004, 0xCDEF89AB );
+		WriteWord( dev, 0x40022008, 0x45670123 ); // OBKEYR = 0x40022008
+		WriteWord( dev, 0x40022008, 0xCDEF89AB );
+		WriteWord( dev, 0x40022024, 0x45670123 ); // MODEKEYR = 0x40022024
+		WriteWord( dev, 0x40022024, 0xCDEF89AB );
+
+		ReadWord( dev, 0x40022010, &rw ); // FLASH->CTLR = 0x40022010
+		if( rw & 0x8080 ) 
+		{
+			return -9;
+		}
+	}
+	iss->flash_unlocked = 1;
+	return 0;
+}
+
+static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length, int type )
+{
+	struct SWIOState * dev = iss;
+
+	uint32_t rw;
+
+	if( !iss->flash_unlocked )
+	{
+		if( ( rw = UnlockFlash( iss ) ) )
+			return rw;
+	}
+
+	if( type == 1 )
+	{
+		// Whole-chip flash
+		iss->statetag = STTAG( "XXXX" );
+		printf( "Whole-chip erase\n" );
+		WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010
+		WriteWord( dev, 0x40022010, FLASH_CTLR_MER  );
+		WriteWord( dev, 0x40022010, CR_STRT_Set|FLASH_CTLR_MER );
+		if( WaitForFlash( dev ) ) return -11;		
+		WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010
+	}
+	else
+	{
+		// 16.4.7, Step 3: Check the BSY bit of the FLASH_STATR register to confirm that there are no other programming operations in progress.
+		// skip (we make sure at the end)
+
+		int chunk_to_erase = address;
+
+		while( chunk_to_erase < address + length )
+		{
+			// Step 4:  set PAGE_ER of FLASH_CTLR(0x40022010)
+			WriteWord( dev, 0x40022010, CR_PAGE_ER ); // Actually FTER //  FLASH->CTLR = 0x40022010
+
+			// Step 5: Write the first address of the fast erase page to the FLASH_ADDR register.
+			WriteWord( dev, 0x40022014, chunk_to_erase  ); // FLASH->ADDR = 0x40022014
+
+			// Step 6: Set the STAT bit of FLASH_CTLR register to '1' to initiate a fast page erase (64 bytes) action.
+			WriteWord( dev, 0x40022010, CR_STRT_Set|CR_PAGE_ER );  // FLASH->CTLR = 0x40022010
+			if( WaitForFlash( dev ) ) return -99;
+			chunk_to_erase+=64;
+		}
+	}
+	return 0;
+}
+
+
+static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint8_t * blob )
+{
+	struct SWIOState * dev = iss;
+
+	int blob_size = 64;
+	uint32_t wp = address_to_write;
+	uint32_t ew = wp + blob_size;
+	int group = -1;
+	int is_flash = 0;
+	int rw = 0;
+
+	if( (address_to_write & 0xff000000) == 0x08000000 || (address_to_write & 0xff000000) == 0x00000000 ) 
+	{
+		// Need to unlock flash.
+		// Flash reg base = 0x40022000,
+		// FLASH_MODEKEYR => 0x40022024
+		// FLASH_KEYR => 0x40022004
+
+		if( !iss->flash_unlocked )
+		{
+			if( ( rw = UnlockFlash( dev ) ) )
+				return rw;
+		}
+
+		is_flash = 1;
+
+		EraseFlash( dev, address_to_write, blob_size, 0 );
+	}
+
+	while( wp < ew )
+	{
+		if( is_flash )
+		{
+			group = (wp & 0xffffffc0);
+			WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
+			WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
+
+			int j;
+			for( j = 0; j < 16; j++ )
+			{
+				int index = (wp-address_to_write);
+				uint32_t data = 0xffffffff;
+				if( index + 3 < blob_size )
+					data = ((uint32_t*)blob)[index/4];
+				else if( (int32_t)(blob_size - index) > 0 )
+				{
+					memcpy( &data, &blob[index], blob_size - index );
+				}
+				WriteWord( dev, wp, data );
+				wp += 4;
+			}
+			WriteWord( dev, 0x40022014, group );
+			WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set );
+			if( (rw = WaitForFlash( dev ) ) ) return rw;
+		}
+		else
+		{
+			int index = (wp-address_to_write);
+			uint32_t data = 0xffffffff;
+			if( index + 3 < blob_size )
+				data = ((uint32_t*)blob)[index/4];
+			else if( (int32_t)(blob_size - index) > 0 )
+				memcpy( &data, &blob[index], blob_size - index );
+			WriteWord( dev, wp, data );
+			wp += 4;
+		}
+	}
+
+	if( is_flash )
+	{
+		if( (rw = WaitForFlash( dev ) ) ) return rw;
+	}
+	return 0;
 }
 
 
