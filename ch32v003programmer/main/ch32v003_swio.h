@@ -34,6 +34,7 @@ struct SWIOState
 	uint32_t lastwriteflags;
 	uint32_t currentstateval;
 	uint32_t flash_unlocked;
+	uint32_t autoincrement;
 };
 
 #define STTAG( x ) (*((uint32_t*)(x)))
@@ -392,24 +393,40 @@ static void ResetInternalProgrammingState( struct SWIOState * iss )
 	iss->lastwriteflags = 0;
 	iss->currentstateval = 0;
 	iss->flash_unlocked = 0;
+	iss->autoincrement = 0;
 }
 
 static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t * data )
 {
 	struct SWIOState * dev = iss;
 
-	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval )
+	int autoincrement = 1;
+	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
+		autoincrement = 0;
+
+	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval || autoincrement != iss->autoincrement )
 	{
-		if( iss->statetag != STTAG( "RDSQ" ) )
+		if( iss->statetag != STTAG( "RDSQ" ) || autoincrement != iss->autoincrement )
 		{
 			WriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
 
 			// c.lw x8,0(x11) // Pull the address from DATA1
 			// c.lw x9,0(x8)  // Read the data at that location.
 			WriteReg32( dev, DMPROGBUF0, 0x40044180 );
-			// c.addi x8, 4
-			// c.sw x9, 0(x10) // Write back to DATA0
-			WriteReg32( dev, DMPROGBUF1, 0xc1040411 );
+			if( autoincrement )
+			{
+				// c.addi x8, 4
+				// c.sw x9, 0(x10) // Write back to DATA0
+
+				WriteReg32( dev, DMPROGBUF1, 0xc1040411 );
+			}
+			else
+			{
+				// c.nop
+				// c.sw x9, 0(x10) // Write back to DATA0
+
+				WriteReg32( dev, DMPROGBUF1, 0xc1040001 );
+			}
 			// c.sw x8, 0(x11) // Write addy to DATA1
 			// c.ebreak
 			WriteReg32( dev, DMPROGBUF2, 0x9002c180 );
@@ -419,6 +436,7 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 				StaticUpdatePROGBUFRegs( dev );
 			}
 			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+			iss->autoincrement = autoincrement;
 		}
 
 		WriteReg32( dev, DMDATA1, address_to_read );
@@ -430,7 +448,8 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 		WaitForDoneOp( dev );
 	}
 
-	iss->currentstateval += 4;
+	if( iss->autoincrement )
+		iss->currentstateval += 4;
 
 	return ReadReg32( dev, DMDATA0, data );
 }
@@ -631,6 +650,10 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 
 		EraseFlash( dev, address_to_write, blob_size, 0 );
 	}
+
+	/* General Note:
+		Most flash operations take about 3ms to complete :(
+	*/
 
 	while( wp < ew )
 	{
