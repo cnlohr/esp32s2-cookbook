@@ -137,10 +137,10 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				GPIO.enable_w1ts = state.pinmask;
 				break;
 			case 0x03: // Power-up
-				GPIO.out_w1ts = pinmaskpower;
 				GPIO.enable_w1ts = pinmaskpower;
-				GPIO.out_w1ts = state.pinmask;
+				GPIO.out_w1ts = pinmaskpower;
 				GPIO.enable_w1ts = state.pinmask;
+				GPIO.out_w1ts = state.pinmask;
 				break;
 			case 0x04: // Delay( uint16_t us )
 				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
