@@ -24,10 +24,12 @@
 #define MAX_IN_TIMEOUT 1000
 #include "ch32v003_swio.h"
 
-uint32_t t1coeff;
-uint32_t pinmask, pinmaskpower;
+uint32_t pinmaskpower;
 uint8_t retbuff[256];
 uint8_t * retbuffptr = 0;
+int retisready = 0;
+
+struct SWIOState state;
 
 void sandbox_main()
 {
@@ -36,13 +38,15 @@ void sandbox_main()
 
 	retbuffptr = retbuff;
 
-	pinmask = 1<<6;
+
+	memset( &state, 0, sizeof( state ) );
+	state.pinmask = 1<<6;
 	pinmaskpower = 1<<7;
 
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
-	GPIO.out_w1ts = pinmask;
-	GPIO.enable_w1ts = pinmask;
+	GPIO.out_w1ts = state.pinmask;
+	GPIO.enable_w1ts = state.pinmask;
 
 	esp_rom_delay_us(5000);
 
@@ -51,31 +55,31 @@ void sandbox_main()
 	switch( m.freq_mhz )
 	{
 	case 240:
-		t1coeff = 9; // 9 or 10 is good.  5 is too low. 13 is sometimes too high.
+		state.t1coeff = 10; // 9 or 10 is good.  5 is too low. 13 is sometimes too high.
 		break;
 	default:
-		t1coeff = 100; // Untested At Other Speeds
+		state.t1coeff = 100; // Untested At Other Speeds
 		break;
 	}
 
 
 #if 0
 //	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
-	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
-	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
+	WriteReg32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
+	WriteReg32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
 
 	uint32_t rval = 0;
-	int r = ReadWord32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
+	int r = ReadReg32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
 	uprintf( "CPBR: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 	
 	#if 0
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
+	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
+	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
+	WriteReg32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
+	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
 	#endif
 	
-	r = ReadWord32( t1coeff, pinmask, 0x11, &rval ); // 
+	r = ReadReg32( t1coeff, pinmask, 0x11, &rval ); // 
 	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 #endif
 
@@ -91,27 +95,6 @@ void teardown()
 
 void sandbox_tick()
 {
-/*
-	uint32_t rval = 0;
-	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
-	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
-
-//	esp_rom_delay_us(100);
-//	r = ReadWord32( t1coeff, pinmask, CDATA0, &rval );
-//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-	r = ReadWord32( t1coeff, pinmask, CDMSTATUS, &rval );
-//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-
-//	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-//	r = ReadWord32( t1coeff, pinmask, 0x05, &rval ); // 
-//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-//	SendWord32( t1coeff, pinmask, CDATA0, 0x12349999 ); // Reset Debug Subsystem
-//	uprintf( "DMSTATUS: %d - %08x\n", r, rval );
-//	SendWord32( t1coeff, pinmask, 0x05, 0x789a4444 ); // Reset Debug Subsystem
-//	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x00000001 ); // Initiate a halt request.
-*/
 	//esp_rom_delay_us(100);
 }
 
@@ -119,49 +102,90 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 {
 	if( is_get )
 	{
+		if( !retisready ) { buffer[0] = 0xff; return reqlen; }
+		retisready = 0;
 		int len = retbuffptr - retbuff;
 		buffer[0] = len;
 		if( len > reqlen-1 ) len = reqlen-1;
 		memcpy( buffer+1, retbuff, len );
 		retbuffptr = retbuff;
-		return len+1;
+		return reqlen;
 	}
 	
 	// Is send.
 	// buffer[0] is the request ID.
 	uint8_t * iptr = &buffer[1];
-	while( iptr - buffer < reqlen )
+	while( iptr - buffer < reqlen )	
 	{
 		uint8_t cmd = *(iptr++);
 		int remain = reqlen - (iptr - buffer);
+		// Make sure there is plenty of space.
+		if( (sizeof(retbuff)-(retbuffptr - retbuff)) < 6 ) break;
 		if( cmd == 0xfe ) // We will never write to 0x7f.
 		{
 			cmd = *(iptr++);
 			switch( cmd )
 			{
 			case 0x01:
-				DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
+				DoSongAndDanceToEnterPgmMode( &state );
 				break;
 			case 0x02: // Power-down 
 				uprintf( "Power down\n" );
 				GPIO.out_w1tc = pinmaskpower;
 				GPIO.enable_w1ts = pinmaskpower;
-				GPIO.out_w1tc = pinmask;
-				GPIO.enable_w1ts = pinmask;
+				GPIO.out_w1tc = state.pinmask;
+				GPIO.enable_w1ts = state.pinmask;
 				break;
 			case 0x03: // Power-up
 				GPIO.out_w1ts = pinmaskpower;
 				GPIO.enable_w1ts = pinmaskpower;
-				GPIO.out_w1ts = pinmask;
-				GPIO.enable_w1ts = pinmask;
+				GPIO.out_w1ts = state.pinmask;
+				GPIO.enable_w1ts = state.pinmask;
 				break;
 			case 0x04: // Delay( uint16_t us )
 				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
 				iptr += 2;
 				break;
+			case 0x05: // Perform bulk write
+			{
+				// Not implemented.
+			}
+			case 0x06: // Wait-for-flash-op.
+			{
+				*(retbuffptr++) = WaitForFlash( &state );
+				break;
+			}
+			case 0x07: // Wait-for-done-op.
+			{
+				*(retbuffptr++) = WaitForDoneOp( &state );
+				break;
+			}
+			case 0x08: // Write Data32.
+			{
+				if( remain >= 9 )
+				{
+					int r = WriteWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24),  iptr[4] | (iptr[5]<<8) | (iptr[6]<<16) | (iptr[7]<<24) );
+					*(retbuffptr++) = r;
+				}
+				break;
+			}
+			case 0x09: // Read Data32.
+			{
+				if( remain >= 5 )
+				{
+					int r = ReadWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint32_t*)&retbuffptr[1] );
+					iptr += 4;
+					retbuffptr[0] = r;
+					if( r < 0 )
+						*((uint32_t*)&retbuffptr[1]) = 0;
+					retbuffptr += 5;
+				}
+				break;
+			}
 			}
 		} else if( cmd == 0xff )
 		{
+			retisready = 1;
 			break;
 		}
 		else
@@ -174,7 +198,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			{
 				if( remain >= 4 )
 				{
-					SendWord32( t1coeff, pinmask, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
+					WriteReg32( &state, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
 					iptr += 4;
 				}
 			}
@@ -182,7 +206,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			{
 				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 4 )
 				{
-					int r = ReadWord32( t1coeff, pinmask, cmd>>1, (uint32_t*)&retbuffptr[1] );
+					int r = ReadReg32( &state, cmd>>1, (uint32_t*)&retbuffptr[1] );
 					retbuffptr[0] = r;
 					if( r < 0 )
 						*((uint32_t*)&retbuffptr[1]) = 0;
