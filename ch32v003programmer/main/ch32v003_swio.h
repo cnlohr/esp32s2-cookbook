@@ -53,6 +53,7 @@ static int WaitForDoneOp( struct SWIOState * state );
 static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint8_t * data );
 static int UnlockFlash( struct SWIOState * iss );
 static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length, int type );
+static void ResetInternalProgrammingState( struct SWIOState * iss );
 
 
 #define DMDATA0        0x04
@@ -633,7 +634,7 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 	int is_flash = 0;
 	int rw = 0;
 
-	if( (address_to_write & 0xff000000) == 0x08000000 || (address_to_write & 0xff000000) == 0x00000000 ) 
+	if( (address_to_write & 0xff000000) == 0x08000000 || (address_to_write & 0xff000000) == 0x00000000  || (address_to_write & 0x1FFFF800) == 0x1FFFF000  ) 
 	{
 		// Need to unlock flash.
 		// Flash reg base = 0x40022000,
@@ -647,7 +648,6 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		}
 
 		is_flash = 1;
-
 		EraseFlash( dev, address_to_write, blob_size, 0 );
 	}
 

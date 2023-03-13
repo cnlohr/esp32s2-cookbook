@@ -146,20 +146,15 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
 				iptr += 2;
 				break;
-			case 0x05: // Perform bulk write
-			{
-				// Not implemented.
-			}
+			case 0x05: // Void High Level State
+				ResetInternalProgrammingState( &state );
+				break;
 			case 0x06: // Wait-for-flash-op.
-			{
 				*(retbuffptr++) = WaitForFlash( &state );
 				break;
-			}
 			case 0x07: // Wait-for-done-op.
-			{
 				*(retbuffptr++) = WaitForDoneOp( &state );
 				break;
-			}
 			case 0x08: // Write Data32.
 			{
 				if( remain >= 9 )
