@@ -18,6 +18,32 @@
 #include "soc/rtc.h"
 #include "freertos/portmacro.h"
 
+// For clock output
+#include "esp_system.h"
+#include "hal/gpio_types.h"
+#include "esp_log.h"
+#include "soc/efuse_reg.h"
+#include "soc/soc.h"
+#include "soc/system_reg.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "hal/gpio_types.h"
+#include "driver/gpio.h"
+#include "rom/gpio.h"
+#include "soc/i2s_reg.h"
+#include "soc/periph_defs.h"
+#include "rom/lldesc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/rtc.h"
+#include "soc/regi2c_apll.h"
+#include "hal/regi2c_ctrl_ll.h"
+#include "esp_private/periph_ctrl.h"
+#include "esp_private/regi2c_ctrl.h"
+#include "hal/clk_tree_ll.h"
+
+
+
+
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
@@ -25,6 +51,7 @@
 #include "ch32v003_swio.h"
 
 uint32_t pinmaskpower;
+uint32_t clockpin;
 uint8_t retbuff[256];
 uint8_t * retbuffptr = 0;
 int retisready = 0;
@@ -42,7 +69,6 @@ void sandbox_main()
 	memset( &state, 0, sizeof( state ) );
 	state.pinmask = 1<<6;
 	pinmaskpower = 1<<7;
-
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
 	GPIO.out_w1ts = state.pinmask;
@@ -98,6 +124,25 @@ void sandbox_tick()
 	//esp_rom_delay_us(100);
 }
 
+
+// Configures APLL = 480 / 4 = 120
+// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
+// Datasheet recommends that numerator does not exceed 500MHz.
+void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm2, uint32_t o_div)
+{
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
+
+	if (enable) {
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, sdm0);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_1);
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_2_REV1);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
+	}
+}
+
 int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 {
 	if( is_get )
@@ -131,16 +176,19 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				break;
 			case 0x02: // Power-down 
 				uprintf( "Power down\n" );
-				GPIO.out_w1tc = pinmaskpower;
-				GPIO.enable_w1ts = pinmaskpower;
+				// Make sure clock is disabled.
+				gpio_matrix_out( GPIO_NUM_4, 254, 1, 0 );
 				GPIO.out_w1tc = state.pinmask;
 				GPIO.enable_w1ts = state.pinmask;
+				GPIO.enable_w1tc = pinmaskpower;
+				GPIO.out_w1tc = pinmaskpower;
 				break;
 			case 0x03: // Power-up
-				GPIO.enable_w1ts = pinmaskpower;
 				GPIO.out_w1ts = pinmaskpower;
+				GPIO.enable_w1ts = pinmaskpower;
 				GPIO.enable_w1ts = state.pinmask;
 				GPIO.out_w1ts = state.pinmask;
+				gpio_matrix_out( GPIO_NUM_4, CLK_I2S_MUX_IDX, 1, 0 );
 				break;
 			case 0x04: // Delay( uint16_t us )
 				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
@@ -188,7 +236,42 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					iptr += 68;
 					*(retbuffptr++) = r;
 				}
+				break;
+			case 0x0c:
+				if( remain >= 8 )
+				{
+					// Output clock on P4.
 
+					// Maximize the drive strength.
+					gpio_set_drive_capability( GPIO_NUM_4, GPIO_DRIVE_CAP_2 );
+
+					// Use the IO matrix to create the inverse of TX on pin 17.
+					gpio_matrix_out( GPIO_NUM_4, CLK_I2S_MUX_IDX, 1, 0 );
+
+					periph_module_enable(PERIPH_I2S0_MODULE);
+
+					int use_apll = *(iptr++);  // try 1
+					int sdm0 = *(iptr++);      // try 0
+					int sdm1 = *(iptr++);      // try 0
+					int sdm2 = *(iptr++);      // try 8
+					int odiv = *(iptr++);      // try 0
+					iptr +=3 ; // reserved.
+
+					local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
+
+					if( use_apll )
+					{
+						WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (1<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (2<<I2S_CLKM_DIV_NUM_S) );
+					}
+					else
+					{
+						// fI2S = fCLK / ( N + B/A )
+						// DIV_NUM = N
+						// Note I2S_CLKM_DIV_NUM minimum = 2 by datasheet.  Less than that and it will ignoreeee you.
+						WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
+					}
+				}
+				break;
 			}
 		} else if( cmd == 0xff )
 		{
@@ -232,3 +315,4 @@ struct SandboxStruct sandbox_mode =
 	.fnDecom = teardown,
 	.fnAdvancedUSB = ch32v003_usb_feature_report
 };
+
