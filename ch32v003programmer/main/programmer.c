@@ -61,7 +61,7 @@ struct SWIOState state;
 void sandbox_main()
 {
 	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-	REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
+	REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
 
 	retbuffptr = retbuff;
 
