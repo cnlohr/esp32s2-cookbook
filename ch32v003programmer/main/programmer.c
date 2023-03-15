@@ -272,6 +272,38 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					}
 				}
 				break;
+			case 0x0d:  // Do a terminal log through.
+			{
+				int tries = 100;
+				if( remain >= 8 )
+				{
+					int r;
+					uint32_t leavevalA = iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24);
+					iptr += 4;
+					uint32_t leavevalB = iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24);
+					iptr += 4;
+					uint8_t * origretbuf = (retbuffptr++);
+					int canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -2;
+					while( canrx > 8 )
+					{
+						r = PollTerminal( &state, retbuffptr, canrx, leavevalA, leavevalB );
+						origretbuf[0] = r;
+						if( r >= 0 )
+						{
+							retbuffptr += r;
+							if( tries-- <= 0 ) break; // ran out of time?
+						}
+						else
+						{
+							break;
+						}
+						canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -2;
+						// Otherwise all is well.  If we aren't signaling try to poll for more data.
+						if( leavevalA != 0 || leavevalB != 0 ) break;
+					}
+				}
+				break;
+			}
 			}
 		} else if( cmd == 0xff )
 		{
@@ -288,7 +320,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			{
 				if( remain >= 4 )
 				{
-					WriteReg32( &state, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
+					MCFWriteReg32( &state, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
 					iptr += 4;
 				}
 			}
@@ -296,7 +328,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			{
 				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 4 )
 				{
-					int r = ReadReg32( &state, cmd>>1, (uint32_t*)&retbuffptr[1] );
+					int r = MCFReadReg32( &state, cmd>>1, (uint32_t*)&retbuffptr[1] );
 					retbuffptr[0] = r;
 					if( r < 0 )
 						*((uint32_t*)&retbuffptr[1]) = 0;

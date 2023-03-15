@@ -42,8 +42,8 @@ struct SWIOState
 #define IRAM IRAM_ATTR
 
 static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state );
-static void WriteReg32( struct SWIOState * state, uint8_t command, uint32_t value ) IRAM;
-static int ReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value ) IRAM;
+static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t value ) IRAM;
+static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value ) IRAM;
 
 // More advanced functions built on lower level PHY.
 static int ReadWord( struct SWIOState * state, uint32_t word, uint32_t * ret );
@@ -54,7 +54,7 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 static int UnlockFlash( struct SWIOState * iss );
 static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length, int type );
 static void ResetInternalProgrammingState( struct SWIOState * iss );
-
+static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, uint32_t leavevalA, uint32_t leavevalB );
 
 #define DMDATA0        0x04
 #define DMDATA1        0x05
@@ -181,7 +181,7 @@ static inline int ReadBit( struct SWIOState * state )
 	return 2;
 }
 
-static void WriteReg32( struct SWIOState * state, uint8_t command, uint32_t value )
+static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t value )
 {
 	int t1coeff = state->t1coeff;
 	int pinmask = state->pinmask;
@@ -212,7 +212,7 @@ static void WriteReg32( struct SWIOState * state, uint8_t command, uint32_t valu
 }
 
 // returns 0 if no error, otherwise error.
-static int ReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value )
+static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value )
 {
 	int t1coeff = state->t1coeff;
 	int pinmask = state->pinmask;
@@ -364,13 +364,13 @@ static int WaitForDoneOp( struct SWIOState * iss )
 	struct SWIOState * dev = iss;
 	do
 	{
-		r = ReadReg32( dev, DMABSTRACTCS, &rrv );
+		r = MCFReadReg32( dev, DMABSTRACTCS, &rrv );
 		if( r ) return r;
 	}
 	while( rrv & (1<<12) );
 	if( (rrv >> 8 ) & 7 )
 	{
-		WriteReg32( dev, DMABSTRACTCS, 0x00000700 );
+		MCFWriteReg32( dev, DMABSTRACTCS, 0x00000700 );
 		ret = -33;
 	}
 	return ret;
@@ -378,14 +378,14 @@ static int WaitForDoneOp( struct SWIOState * iss )
 
 static void StaticUpdatePROGBUFRegs( struct SWIOState * dev )
 {
-	WriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
-	WriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
-	WriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
-	WriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
-	WriteReg32( dev, DMDATA0, 0x40022010 ); //FLASH->CTLR
-	WriteReg32( dev, DMCOMMAND, 0x0023100c ); // Copy data to x12
-	WriteReg32( dev, DMDATA0, CR_PAGE_PG|CR_BUF_LOAD);
-	WriteReg32( dev, DMCOMMAND, 0x0023100d ); // Copy data to x13
+	MCFWriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
+	MCFWriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
+	MCFWriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
+	MCFWriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
+	MCFWriteReg32( dev, DMDATA0, 0x40022010 ); //FLASH->CTLR
+	MCFWriteReg32( dev, DMCOMMAND, 0x0023100c ); // Copy data to x12
+	MCFWriteReg32( dev, DMDATA0, CR_PAGE_PG|CR_BUF_LOAD);
+	MCFWriteReg32( dev, DMCOMMAND, 0x0023100d ); // Copy data to x13
 }
 
 static void ResetInternalProgrammingState( struct SWIOState * iss )
@@ -409,39 +409,39 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 	{
 		if( iss->statetag != STTAG( "RDSQ" ) || autoincrement != iss->autoincrement )
 		{
-			WriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
 
 			// c.lw x8,0(x11) // Pull the address from DATA1
 			// c.lw x9,0(x8)  // Read the data at that location.
-			WriteReg32( dev, DMPROGBUF0, 0x40044180 );
+			MCFWriteReg32( dev, DMPROGBUF0, 0x40044180 );
 			if( autoincrement )
 			{
 				// c.addi x8, 4
 				// c.sw x9, 0(x10) // Write back to DATA0
 
-				WriteReg32( dev, DMPROGBUF1, 0xc1040411 );
+				MCFWriteReg32( dev, DMPROGBUF1, 0xc1040411 );
 			}
 			else
 			{
 				// c.nop
 				// c.sw x9, 0(x10) // Write back to DATA0
 
-				WriteReg32( dev, DMPROGBUF1, 0xc1040001 );
+				MCFWriteReg32( dev, DMPROGBUF1, 0xc1040001 );
 			}
 			// c.sw x8, 0(x11) // Write addy to DATA1
 			// c.ebreak
-			WriteReg32( dev, DMPROGBUF2, 0x9002c180 );
+			MCFWriteReg32( dev, DMPROGBUF2, 0x9002c180 );
 
 			if( iss->statetag != STTAG( "WRSQ" ) )
 			{
 				StaticUpdatePROGBUFRegs( dev );
 			}
-			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 			iss->autoincrement = autoincrement;
 		}
 
-		WriteReg32( dev, DMDATA1, address_to_read );
-		WriteReg32( dev, DMCOMMAND, 0x00241000 ); // Only execute.
+		MCFWriteReg32( dev, DMDATA1, address_to_read );
+		MCFWriteReg32( dev, DMCOMMAND, 0x00241000 ); // Only execute.
 
 		iss->statetag = STTAG( "RDSQ" );
 		iss->currentstateval = address_to_read;
@@ -452,7 +452,7 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 	if( iss->autoincrement )
 		iss->currentstateval += 4;
 
-	return ReadReg32( dev, DMDATA0, data );
+	return MCFReadReg32( dev, DMDATA0, data );
 }
 
 static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_t data )
@@ -473,15 +473,15 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 		int did_disable_req = 0;
 		if( iss->statetag != STTAG( "WRSQ" ) )
 		{
-			WriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
 			did_disable_req = 1;
 			// Different address, so we don't need to re-write all the program regs.
 			// c.lw x9,0(x11) // Get the address to write to. 
 			// c.sw x8,0(x9)  // Write to the address.
-			WriteReg32( dev, DMPROGBUF0, 0xc0804184 );
+			MCFWriteReg32( dev, DMPROGBUF0, 0xc0804184 );
 			// c.addi x9, 4
 			// c.sw x9,0(x11)
-			WriteReg32( dev, DMPROGBUF1, 0xc1840491 );
+			MCFWriteReg32( dev, DMPROGBUF1, 0xc1840491 );
 
 			if( iss->statetag != STTAG( "RDSQ" ) )
 			{
@@ -497,21 +497,21 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 				// After writing to memory, also hit up page load flag.
 				// c.sw x13,0(x12) // Acknowledge the page write.
 				// c.ebreak
-				WriteReg32( dev, DMPROGBUF2, 0x9002c214 );
+				MCFWriteReg32( dev, DMPROGBUF2, 0x9002c214 );
 			}
 			else
 			{
-				WriteReg32( dev, DMPROGBUF2, 0x00019002 ); // c.ebreak
+				MCFWriteReg32( dev, DMPROGBUF2, 0x00019002 ); // c.ebreak
 			}
 		}
 
-		WriteReg32( dev, DMDATA1, address_to_write );
-		WriteReg32( dev, DMDATA0, data );
+		MCFWriteReg32( dev, DMDATA1, address_to_write );
+		MCFWriteReg32( dev, DMDATA0, data );
 
 		if( did_disable_req )
 		{
-			WriteReg32( dev, DMCOMMAND, 0x00271008 ); // Copy data to x8, and execute program.
-			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+			MCFWriteReg32( dev, DMCOMMAND, 0x00271008 ); // Copy data to x8, and execute program.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
 		iss->lastwriteflags = is_flash;
 
@@ -526,11 +526,11 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 	{
 		if( address_to_write != iss->currentstateval )
 		{
-			WriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
-			WriteReg32( dev, DMDATA1, address_to_write );
-			WriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
+			MCFWriteReg32( dev, DMDATA1, address_to_write );
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
-		WriteReg32( dev, DMDATA0, data );
+		MCFWriteReg32( dev, DMDATA0, data );
 		if( is_flash )
 		{
 			// XXX TODO: This likely can be a very short delay.
@@ -701,6 +701,56 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 	return 0;
 }
 
+// Polls up to 7 bytes of printf, and can leave a 7-bit flag for the CH32V003.
+static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, uint32_t leavevalA, uint32_t leavevalB )
+{
+	struct SWIOState * dev = iss;
+
+	int r;
+	uint32_t rr;
+	if( iss->statetag != STTAG( "TERM" ) )
+	{
+		MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
+		iss->statetag = STTAG( "TERM" );
+	}
+	r = MCFReadReg32( dev, DMDATA0, &rr );
+	if( r < 0 ) return r;
+
+	if( maxlen < 8 ) return -9;
+
+	// DMDATA1:
+	//  bit  7 = host-acknowledge.
+	if( rr & 0x80 )
+	{
+		int ret = 0;
+		int num_printf_chars = (rr & 0xf)-4;
+
+		if( num_printf_chars > 0 && num_printf_chars <= 7)
+		{
+			if( num_printf_chars > 3 )
+			{
+				uint32_t r2;
+				r = MCFReadReg32( dev, DMDATA1, &r2 );
+				memcpy( buffer+3, &r2, num_printf_chars - 3 );
+			}
+			int firstrem = num_printf_chars;
+			if( firstrem > 3 ) firstrem = 3;
+			memcpy( buffer, ((uint8_t*)&rr)+1, firstrem );
+			buffer[num_printf_chars] = 0;
+			ret = num_printf_chars;
+		}
+		if( leavevalA )
+		{
+			MCFWriteReg32( dev, DMDATA1, leavevalB );
+		}
+		MCFWriteReg32( dev, DMDATA0, leavevalA ); // Write that we acknowledge the data.
+		return ret;
+	}
+	else
+	{
+		return 0;
+	}
+}
 
 #endif
 
