@@ -60,15 +60,20 @@ struct SWIOState state;
 
 void sandbox_main()
 {
-	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-	REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
+	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
+	REG_WRITE( IO_MUX_GPIO11_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
+	REG_WRITE( IO_MUX_GPIO12_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //5V for part 40mA drive.
+
+	REG_WRITE( IO_MUX_GPIO9_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+	GPIO.out_w1ts = 1<<9;
+	GPIO.enable_w1ts = 1<<9;
 
 	retbuffptr = retbuff;
 
 
 	memset( &state, 0, sizeof( state ) );
 	state.pinmask = 1<<6;
-	pinmaskpower = 1<<7;
+	pinmaskpower = (1<<11) | (1<<12);
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
 	GPIO.out_w1ts = state.pinmask;
@@ -116,7 +121,10 @@ void teardown()
 	// Power-Down
 	GPIO.out_w1tc = 1<<6;
 	GPIO.out_w1ts = 1<<6;
-	GPIO.out_w1tc = 1<<7;
+	GPIO.out_w1tc = 1<<11;
+	GPIO.out_w1tc = 1<<12;
+	
+	GPIO.out_w1tc = 1<<9;
 }
 
 void sandbox_tick()
@@ -177,7 +185,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			case 0x02: // Power-down 
 				uprintf( "Power down\n" );
 				// Make sure clock is disabled.
-				gpio_matrix_out( GPIO_NUM_4, 254, 1, 0 );
+				gpio_matrix_out( GPIO_NUM_2, 254, 1, 0 );
 				GPIO.out_w1tc = state.pinmask;
 				GPIO.enable_w1ts = state.pinmask;
 				GPIO.enable_w1tc = pinmaskpower;
@@ -240,13 +248,13 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			case 0x0c:
 				if( remain >= 8 )
 				{
-					// Output clock on P4.
+					// Output clock on P2.
 
 					// Maximize the drive strength.
-					gpio_set_drive_capability( GPIO_NUM_4, GPIO_DRIVE_CAP_2 );
+					gpio_set_drive_capability( GPIO_NUM_2, GPIO_DRIVE_CAP_2 );
 
 					// Use the IO matrix to create the inverse of TX on pin 17.
-					gpio_matrix_out( GPIO_NUM_4, CLK_I2S_MUX_IDX, 1, 0 );
+					gpio_matrix_out( GPIO_NUM_2, CLK_I2S_MUX_IDX, 1, 0 );
 
 					periph_module_enable(PERIPH_I2S0_MODULE);
 
