@@ -234,7 +234,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				}
 				break;
 			}
-			case 0x0a: // Read Data32.
+			case 0x0a:
 				ResetInternalProgrammingState( &state );
 				break;
 			case 0x0b:
