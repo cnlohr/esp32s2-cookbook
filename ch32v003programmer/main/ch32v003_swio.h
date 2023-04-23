@@ -752,5 +752,5 @@ static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, u
 	}
 }
 
-#endif
+#endif // _CH32V003_SWIO_H
 
