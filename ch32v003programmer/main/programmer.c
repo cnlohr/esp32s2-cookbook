@@ -40,15 +40,14 @@
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/regi2c_ctrl.h"
 #include "hal/clk_tree_ll.h"
-
-
-
+#include "pindefs.h"
 
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
 #define MAX_IN_TIMEOUT 1000
 #include "ch32v003_swio.h"
+
 
 uint32_t pinmaskpower;
 uint32_t clockpin;
@@ -60,20 +59,20 @@ struct SWIOState state;
 
 void sandbox_main()
 {
-	REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
-	REG_WRITE( IO_MUX_GPIO11_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-	REG_WRITE( IO_MUX_GPIO12_REG, 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //5V for part 40mA drive.
+	REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
+	REG_WRITE( IO_MUX_REG(VDD3V3_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
+	REG_WRITE( IO_MUX_REG(VDD5V_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //5V for part 40mA drive.
 
-	REG_WRITE( IO_MUX_GPIO9_REG, 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
-	GPIO.out_w1ts = 1<<9;
-	GPIO.enable_w1ts = 1<<9;
+	REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+	GPIO.out_w1ts = 1<<SWIO_PU_PIN;
+	GPIO.enable_w1ts = 1<<SWIO_PU_PIN;
 
 	retbuffptr = retbuff;
 
 
 	memset( &state, 0, sizeof( state ) );
-	state.pinmask = 1<<6;
-	pinmaskpower = (1<<11) | (1<<12);
+	state.pinmask = 1<<SWIO_PIN;
+	pinmaskpower = (1<<VDD3V3_EN_PIN) | (1<<VDD5V_EN_PIN);
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
 	GPIO.out_w1ts = state.pinmask;
@@ -92,7 +91,6 @@ void sandbox_main()
 		state.t1coeff = 100; // Untested At Other Speeds
 		break;
 	}
-
 
 #if 0
 //	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
@@ -113,25 +111,22 @@ void sandbox_main()
 	r = ReadReg32( t1coeff, pinmask, 0x11, &rval ); // 
 	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
 #endif
-
 }
 
 void teardown()
 {
 	// Power-Down
-	GPIO.out_w1tc = 1<<6;
-	GPIO.out_w1ts = 1<<6;
-	GPIO.out_w1tc = 1<<11;
-	GPIO.out_w1tc = 1<<12;
-	
-	GPIO.out_w1tc = 1<<9;
+	GPIO.out_w1tc = 1<<SWIO_PIN;
+	GPIO.out_w1ts = 1<<SWIO_PIN;
+	GPIO.out_w1tc = 1<<VDD3V3_EN_PIN;
+	GPIO.out_w1tc = 1<<VDD5V_EN_PIN;	
+	GPIO.out_w1tc = 1<<SWIO_PU_PIN;
 }
 
 void sandbox_tick()
 {
 	//esp_rom_delay_us(100);
 }
-
 
 // Configures APLL = 480 / 4 = 120
 // 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
@@ -185,7 +180,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			case 0x02: // Power-down 
 				uprintf( "Power down\n" );
 				// Make sure clock is disabled.
-				gpio_matrix_out( GPIO_NUM_2, 254, 1, 0 );
+				gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
 				GPIO.out_w1tc = state.pinmask;
 				GPIO.enable_w1ts = state.pinmask;
 				GPIO.enable_w1tc = pinmaskpower;
@@ -196,7 +191,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				GPIO.enable_w1ts = pinmaskpower;
 				GPIO.enable_w1ts = state.pinmask;
 				GPIO.out_w1ts = state.pinmask;
-				gpio_matrix_out( GPIO_NUM_4, CLK_I2S_MUX_IDX, 1, 0 );
+				gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 				break;
 			case 0x04: // Delay( uint16_t us )
 				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
@@ -251,10 +246,10 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					// Output clock on P2.
 
 					// Maximize the drive strength.
-					gpio_set_drive_capability( GPIO_NUM_2, GPIO_DRIVE_CAP_2 );
+					gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_2 );
 
 					// Use the IO matrix to create the inverse of TX on pin 17.
-					gpio_matrix_out( GPIO_NUM_2, CLK_I2S_MUX_IDX, 1, 0 );
+					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 
 					periph_module_enable(PERIPH_I2S0_MODULE);
 
