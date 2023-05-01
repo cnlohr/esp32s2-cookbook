@@ -436,7 +436,7 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 			{
 				StaticUpdatePROGBUFRegs( dev );
 			}
-			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec (not autoincrement)
 			iss->autoincrement = autoincrement;
 		}
 
