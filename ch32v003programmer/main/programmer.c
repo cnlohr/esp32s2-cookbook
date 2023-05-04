@@ -286,7 +286,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					uint32_t leavevalB = iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24);
 					iptr += 4;
 					uint8_t * origretbuf = (retbuffptr++);
-					int canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -2;
+					int canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) - 8;
 					while( canrx > 8 )
 					{
 						r = PollTerminal( &state, retbuffptr, canrx, leavevalA, leavevalB );
@@ -300,7 +300,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 						{
 							break;
 						}
-						canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -2;
+						canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -8;
 						// Otherwise all is well.  If we aren't signaling try to poll for more data.
 						if( leavevalA != 0 || leavevalB != 0 ) break;
 					}
@@ -310,7 +310,6 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			}
 		} else if( cmd == 0xff )
 		{
-			retisready = 1;
 			break;
 		}
 		else
@@ -340,6 +339,8 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			}
 		}
 	}
+
+	retisready = 1;
 
 	return 0;
 }
