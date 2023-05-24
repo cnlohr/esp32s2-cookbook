@@ -7,6 +7,7 @@
 #include "esp_system.h"
 #include "spi_flash_mmap.h"
 #include "esp_log.h"
+#include "hal/usb_ll.h"
 #include "rom/cache.h"
 #include "soc/sensitive_reg.h"
 #include "soc/dport_access.h"
@@ -155,15 +156,23 @@ void IRAM_ATTR handle_advanced_usb_control_set( int datalen, const uint8_t * dat
 	{
 	case AUSB_CMD_REBOOT:
 		{
-		// This is mentioned a few places, but seems unnecessary.
-		//void chip_usb_set_persist_flags( uint32_t x );
-		//chip_usb_set_persist_flags( USBDC_PERSIST_ENA );
+		// Drive USB Lines to force an enumeration
+		usb_ll_int_phy_pullup_conf(false, true, false, true);
+
+		// Wait 600 ms (to emulate a POR, a shorter time probably works, but is untested)
+		vTaskDelay(600 / portTICK_PERIOD_MS);
 
 		// Decide to reboot into bootloader or not.
 		REG_WRITE(RTC_CNTL_OPTION1_REG, value?RTC_CNTL_FORCE_DOWNLOAD_BOOT:0 );
 
+#ifdef IDF_VER
+		// Restart via the ESP-IDF API
+		// This allows a clean shutdown to happen via the esp_register_shutdown_handler()
+		esp_restart();
+#else
 		void software_reset(uint32_t x);
 		software_reset( 0 ); // ROM function
+#endif
 
 		break;
 		}
