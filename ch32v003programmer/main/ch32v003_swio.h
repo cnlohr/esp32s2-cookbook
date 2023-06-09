@@ -346,13 +346,17 @@ static int WaitForFlash( struct SWIOState * iss )
 	{
 		rw = 0;
 		ReadWord( dev, 0x4002200C, &rw ); // FLASH_STATR => 0x4002200C
-		if( timeout++ > 100 ) return -1;
-	} while(rw & 1);  // BSY flag.
+	} while( (rw & 1) && timeout++ < 200);  // BSY flag.
+
+	WriteWord( dev, 0x4002200C, 0 );
 
 	if( rw & FLASH_STATR_WRPRTERR )
-	{
 		return -44;
-	}
+
+
+	if( rw & 1 )
+		return -5;
+
 	return 0;
 }
 
@@ -595,7 +599,7 @@ static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length
 		WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010
 		WriteWord( dev, 0x40022010, FLASH_CTLR_MER  );
 		WriteWord( dev, 0x40022010, CR_STRT_Set|FLASH_CTLR_MER );
-		if( WaitForFlash( dev ) ) return -11;		
+		if( WaitForFlash( dev ) ) return -13;
 		WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010
 	}
 	else
@@ -607,6 +611,8 @@ static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length
 
 		while( chunk_to_erase < address + length )
 		{
+			if( WaitForFlash( dev ) ) return -14;
+
 			// Step 4:  set PAGE_ER of FLASH_CTLR(0x40022010)
 			WriteWord( dev, 0x40022010, CR_PAGE_ER ); // Actually FTER //  FLASH->CTLR = 0x40022010
 
@@ -615,7 +621,9 @@ static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length
 
 			// Step 6: Set the STAT bit of FLASH_CTLR register to '1' to initiate a fast page erase (64 bytes) action.
 			WriteWord( dev, 0x40022010, CR_STRT_Set|CR_PAGE_ER );  // FLASH->CTLR = 0x40022010
-			if( WaitForFlash( dev ) ) return -99;
+			if( WaitForFlash( dev ) ) return -15;
+
+			WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010 (Disable any pending ops)
 			chunk_to_erase+=64;
 		}
 	}
@@ -648,7 +656,13 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		}
 
 		is_flash = 1;
-		EraseFlash( dev, address_to_write, blob_size, 0 );
+		rw = EraseFlash( dev, address_to_write, blob_size, 0 );
+		if( rw ) return rw;
+		// 16.4.6 Main memory fast programming, Step 5
+		//if( WaitForFlash( dev ) ) return -11;
+		//WriteWord( dev, 0x40022010, FLASH_CTLR_BUF_RST );
+		//if( WaitForFlash( dev ) ) return -11;
+
 	}
 
 	/* General Note:
@@ -660,7 +674,7 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		if( is_flash )
 		{
 			group = (wp & 0xffffffc0);
-			WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
+			WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010   (PG Performs quick page programming operations.)
 			WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
 
 			int j;
@@ -675,10 +689,11 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 					memcpy( &data, &blob[index], blob_size - index );
 				}
 				WriteWord( dev, wp, data );
+				//if( (rw = WaitForFlash( dev ) ) ) return rw;
 				wp += 4;
 			}
 			WriteWord( dev, 0x40022014, group );
-			WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set );
+			WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set );  // R32_FLASH_CTLR
 			if( (rw = WaitForFlash( dev ) ) ) return rw;
 		}
 		else
@@ -694,10 +709,6 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		}
 	}
 
-	if( is_flash )
-	{
-		if( (rw = WaitForFlash( dev ) ) ) return rw;
-	}
 	return 0;
 }
 
