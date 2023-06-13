@@ -1,6 +1,6 @@
 # ESP32-S2 CH32V003 Programmer
 
-Connect SWIO (Pin D4) on CH32V003 to GPIO6 on the ESP32S2.
+Connect SWIO (Pin D1) on CH32V003 to GPIO6 on the ESP32S2.
  * Optionally use 10k pull-up on SWIO.
  * Optional Clock Synthesizer is on GPIO2 "Multi2" / "M0"
  * VCC Output on GPIO11/12 on ESP32S2.
