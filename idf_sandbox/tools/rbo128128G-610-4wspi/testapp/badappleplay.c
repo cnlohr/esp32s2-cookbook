@@ -34,6 +34,34 @@ void setup_video_decode()
 	printf( "REGISTERING\n" );
 }
 
+void clearframe()
+{
+	int sec;
+
+	uint8_t rdata[300];
+	memset( rdata, 0, sizeof( rdata ) );
+	uint8_t * rdataptr = rdata;
+
+	for( sec = 0; sec < 16; sec++ )
+	{
+		int ab;
+		for( ab = 0; ab < 2; ab++ )
+		{
+			memset( rdata, 0, sizeof( rdata ) );
+			rdataptr = rdata;
+			*(rdataptr++) = 0xad; // Report ID.
+			*(rdataptr++) = (sec) | (ab?0x10:0);
+			int i;
+			for( i = 0; i < 128; i++ )
+			{
+				*(rdataptr++) = 0;
+			}
+			int trysend = 130;
+			int r = hid_send_feature_report( hd, rdata, trysend );
+		}
+	}
+}
+
 void got_video_frame( unsigned char * rgbbuffer, int linesize, int width, int height, int frame )
 {
 	printf( "%d %d\n", width, linesize );
@@ -64,7 +92,7 @@ void got_video_frame( unsigned char * rgbbuffer, int linesize, int width, int he
 				int rmask = 1<<(!(i&1));
 				for( y = 0; y < 8; y++ )
 				{
-					int grey4 = line[linesize * y] / 64;
+					int grey4 = (255-line[linesize * y]) / 64;
 					ts |= ((grey4 & rmask)?1:0) << y;
 				}
 				*(rdataptr++) = ts;
@@ -109,6 +137,8 @@ int main()
 
 	int r = hid_send_feature_report( hd, rdata, 130 );
 	printf( "%d\n", r );
+
+	clearframe();
 
 	setup_video_decode();
 
