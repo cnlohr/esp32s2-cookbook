@@ -33,11 +33,11 @@ int main( int argc, char ** argv )
 	*(rdataptr++) = 0xff; // Report ID.
 
 
-	*(rdataptr++) = 0x53; // LCD Bias
+	*(rdataptr++) = 0x52; // LCD Bias
 //	Write(COMMAND, 0x52); // Set LCD Bias=1/8 V0 (Experimentally found)
 
 	*(rdataptr++) = 0x81; // Set Reference Voltage "Set Electronic Volume Register"
-	*(rdataptr++) = 0x32; // Midway up.
+	*(rdataptr++) = 0x23; // Midway up.
 
 	*(rdataptr++) = 0x00;
 	*(rdataptr++) = 0x7B;
@@ -45,6 +45,7 @@ int main( int argc, char ** argv )
 	*(rdataptr++) = 0x00;
 	*(rdataptr++) = 0xff; // teminate
 
+	rdata[1] = (rdataptr-rdata)-2;
 
 	int r = hid_send_feature_report( hd, rdata, 130 );
 	printf( "%d\n", r );
