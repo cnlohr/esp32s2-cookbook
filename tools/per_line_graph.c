@@ -45,7 +45,11 @@ int main( int argc, char ** argv )
 
 
 		char line[8192];
-		fgets(line, sizeof(line), stdin);
+		char * fgs = fgets(line, sizeof(line), stdin);
+		if( fgs == 0 )
+		{
+			break;
+		}
 		
 		int field = 0;
 		char * fieldstart = 0;
@@ -71,6 +75,9 @@ int main( int argc, char ** argv )
 				if( !fieldstart ) fieldstart = c;
 			}
 		}
+
+		//printf( "FIELDS: %d [%s %s]\n", field, line, fgs );
+
 		field-=offset;
 		if( field <= 0 ) continue;
 		int fdiv = w/field;
