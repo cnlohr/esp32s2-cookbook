@@ -10,9 +10,9 @@ int main( int argc, char ** argv )
 	int i;
 	uint8_t rdata[300];
 	
-	if( argc < 2 )
+	if( argc < 3 )
 	{
-		fprintf( stderr, "Usage: testapp [picture file]\n" );
+		fprintf( stderr, "Usage: testapp [picture file] [intensity]\n" );
 		return -9;
 	}
 
@@ -37,7 +37,7 @@ int main( int argc, char ** argv )
 //	Write(COMMAND, 0x52); // Set LCD Bias=1/8 V0 (Experimentally found)
 
 	*(rdataptr++) = 0x81; // Set Reference Voltage "Set Electronic Volume Register"
-	*(rdataptr++) = 0x23; // Midway up.
+	*(rdataptr++) = atoi(argv[2]); // Midway up.
 
 	*(rdataptr++) = 0x00;
 	*(rdataptr++) = 0x7B;
@@ -48,12 +48,11 @@ int main( int argc, char ** argv )
 	rdata[1] = (rdataptr-rdata)-2;
 
 	int r = hid_send_feature_report( hd, rdata, 130 );
-	printf( "%d\n", r );
 
 
-	int w, h, n = 1;
-	unsigned char *rgbbuffer = stbi_load(argv[1], &w, &h, 0, 1);
-
+	int w, h, n = 3;
+	unsigned char *rgbbuffer = stbi_load(argv[1], &w, &h, &n, 3);
+	n = 3;
 	int frame;
 	int sec;
 	if( !rgbbuffer )
@@ -80,12 +79,14 @@ int main( int argc, char ** argv )
 		for( i = 0; i < 256; i++ )
 		{
 			uint8_t * line = rgbbuffer + (sec * 8 * linesize ) + (i/2) * n;
+
 			uint8_t ts = 0;
 			int y;
 			int rmask = 1<<(!(i&1));
 			for( y = 0; y < 8; y++ )
 			{
-				int grey4 = (255-line[linesize * y]) / 64;
+				uint8_t * pix = &line[linesize * y];
+				int grey4 = (255-pix[i%3]) / 64;
 				ts |= ((grey4 & rmask)?1:0) << y;
 			}
 			*(rdataptr++) = ts;
