@@ -9,7 +9,7 @@ void HandleDestroy() { }
 
 #include <pthread.h>
 
-float buffer[1024];
+float buffer[16384];
 int head = 0;
 int tail = 0;
 
@@ -38,7 +38,7 @@ void * vmt( void * v)
 			{
 				float f = atof( nextstart );
 				nextstart = line + c + 1;
-				head = (head+1)%1024;
+				head = (head+1)%16384;
 				buffer[head] = f;
 				printf( "%f\n", f );
 				break;
@@ -55,7 +55,7 @@ int main( int argc, char ** argv )
 	CNFGSetup( "Example Graph App", 1024, 768 );
 	
 	int i;
-	for( i =0 ; i< 1024; i++ )buffer[i] = 1e30;
+	for( i =0 ; i< 16384; i++ )buffer[i] = 1e30;
 	
 	if( argc == 1 )
 	{
@@ -95,18 +95,24 @@ int main( int argc, char ** argv )
 		}
 		else
 		{
-			for( x = 0; x < 1024; x++ )
+			for( x = 0; x < w; x++ )
 			{
-				float v0 = buffer[(x+head)%1024];
+				float v0 = buffer[(head-x+16384)%16384];
 				if( v0 > 1e20 ) continue;
 				if( v0 < minv ) minv = v0;
 				if( v0 > maxv ) maxv = v0;
 			}
-		}	
-		for( x = 0; x < 1024; x++ )
+		}
+		CNFGPenX = 20;
+		CNFGPenY = 20;
+		char cts2[1024];
+		sprintf( cts2, "%f\n%f\n%f", minv, maxv, maxv-minv );
+		CNFGDrawText( cts2, 2 );
+
+		for( x = 0; x < w; x++ )
 		{
-			float v0 = buffer[(x+head)%1024];
-			float v1 = buffer[(x+head+1)%1024];
+			float v0 = buffer[(head-x+16384)%16384];
+			float v1 = buffer[(head-x+16384+1)%16384];
 			float v0i = v0;
 			float v1i = v1;
 			if( v0 < minv ) v0 = minv;
@@ -119,7 +125,7 @@ int main( int argc, char ** argv )
 				CNFGColor( 0xffffffff );
 			v0 = h - (v0 - minv) / (maxv - minv ) * (h-2) -1;
 			v1 = h - (v1 - minv) / (maxv - minv ) * ( h-2) -1;
-			CNFGTackSegment( x, v0, x+1, v1 );
+			CNFGTackSegment( x+1, v0, x, v1 );
 		}		
 
 

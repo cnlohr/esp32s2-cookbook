@@ -1,4 +1,4 @@
-all : graph_values_over_time per_line_graph
+all : graph_values_over_time multi_graph_values_over_time per_line_graph
 
 LDFLAGS:=-lX11 -lpthread
 CFLAGS:=-s -Os
@@ -7,6 +7,9 @@ per_line_graph : per_line_graph.c
 	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 graph_values_over_time : graph_values_over_time.c
+	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
+
+multi_graph_values_over_time : multi_graph_values_over_time.c
 	gcc -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 clean :
