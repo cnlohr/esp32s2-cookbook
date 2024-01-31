@@ -1,0 +1,50 @@
+
+build/sandbox.o:     file format elf32-xtensa-le
+
+SYMBOL TABLE:
+4006dd00 l    d  .inst	00000000 .inst
+3fffdf10 l    d  .data	00000000 .data
+3fffdf30 l    d  .bss	00000000 .bss
+00000000 l    d  .debug_frame	00000000 .debug_frame
+00000000 l    d  .debug_info	00000000 .debug_info
+00000000 l    d  .debug_abbrev	00000000 .debug_abbrev
+00000000 l    d  .debug_loclists	00000000 .debug_loclists
+00000000 l    d  .debug_aranges	00000000 .debug_aranges
+00000000 l    d  .debug_rnglists	00000000 .debug_rnglists
+00000000 l    d  .debug_line	00000000 .debug_line
+00000000 l    d  .debug_str	00000000 .debug_str
+00000000 l    d  .debug_line_str	00000000 .debug_line_str
+00000000 l    d  .comment	00000000 .comment
+00000000 l    d  .xtensa.info	00000000 .xtensa.info
+00000000 l    d  .xt.lit	00000000 .xt.lit
+00000000 l    d  .xt.prop	00000000 .xt.prop
+00000000 l    df *ABS*	00000000 sandbox.c
+00000000 l    df *ABS*	00000000 cc0hoehX.o
+4006dee4 l       .inst	00000000 _advanced_usb_printf_head
+4006dee8 l       .inst	00000000 _GPIO_IN_REG
+4006df04 g       .inst	00000000 asm_read_gpio
+40025c74 g       *ABS*	00000000 regi2c_ctrl_write_reg
+40019460 g       *ABS*	00000000 gpio_matrix_out
+40088198 g       *ABS*	00000000 gpio_set_drive_capability
+40085360 g       *ABS*	00000000 uprintf
+4006dd4c g     F .inst	000000c5 local_rtc_clk_apll_enable
+3fffdf10 g       .data	00000000 sandbox_sentinel_start_data
+00000004 g       *ABS*	00000000 sandbox_bss_size
+3fffdf30 g       .data	00000000 sandbox_sentinel_end_data
+3fffdf20 g     O .data	0000000c sandbox_mode
+4006de14 g     F .inst	00000036 apll_quick_update
+4006df0e g       .inst	00000000 sandbox_sentinel_end_inst
+40098354 g       *ABS*	00000000 periph_module_enable
+40025ca8 g       *ABS*	00000000 regi2c_ctrl_write_reg_mask
+4006defc g       .inst	00000000 minimal_function
+4006deec g       .inst	00000000 test_function
+4006de94 g     F .inst	0000004d sandbox_main
+3ffc09ac g       *ABS*	00000000 advanced_usb_printf_head
+3fffdf30 g     O .bss	00000004 frame
+3fffdf2c g     O .data	00000004 global_i
+4006dd00 g       .inst	00000000 sandbox_sentinel_start_inst
+40027d7c g       *ABS*	00000000 esp_rom_regi2c_write
+4006de4c g     F .inst	00000046 sandbox_tick
+3fffdd00 g       .data	00000000 sandbox_sentinel_origin_data
+
+

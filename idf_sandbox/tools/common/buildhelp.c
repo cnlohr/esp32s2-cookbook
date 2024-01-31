@@ -155,6 +155,8 @@ int main( int argc, char ** argv )
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/port/xtensa/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/FreeRTOS-Kernel/portable/xtensa/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/include/esp_additions/freertos", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/freertos/esp_additions/arch/xtensa/include", idf_path ); appendcflag( temp );
+			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/driver/gpio/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/xtensa/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/xtensa/esp32s2/include", idf_path ); appendcflag( temp );
 			snprintf( temp, sizeof( temp ) - 1, "-I%s/components/driver/include", idf_path ); appendcflag( temp );

@@ -1,0 +1,341 @@
+
+build/sandbox.o:     file format elf32-xtensa-le
+
+
+Disassembly of section .inst:
+
+4006dd00 <sandbox_sentinel_start_inst>:
+4006dd00:	3f408034 	
+4006dd04:	ff7fffff 	
+4006dd08:	feffffff 	
+4006dd0c:	01000000 	
+4006dd10:	00800000 	
+4006dd14:	40025ca8 	
+4006dd18:	40025c74 	
+4006dd1c:	40027d7c 	
+4006dd20:	3fffdf30 	
+4006dd24:	01161f82 	
+4006dd28:	cccccccd 	
+4006dd2c:	7ffe0000 	
+4006dd30:	3fffdf10 	
+4006dd34:	3f40f0ac 	
+4006dd38:	00300001 	
+4006dd3c:	40085360 	
+4006dd40:	40088198 	
+4006dd44:	40019460 	
+4006dd48:	40098354 	
+
+4006dd4c <local_rtc_clk_apll_enable>:
+
+// Configures APLL = 480 / 4 = 120
+// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
+// Datasheet recommends that numerator does not exceed 500MHz.
+void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm2, uint32_t o_div)
+{
+4006dd4c:	004136        	entry	a1, 32
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
+4006dd4f:	ffec81        	l32r	a8, 4006dd00 <sandbox_sentinel_start_inst> (3f408034 <sandbox_bss_size+0x3f408030>)
+4006dd52:	ffeca1        	l32r	a10, 4006dd04 <sandbox_sentinel_start_inst+0x4> (ff7fffff <periph_module_enable+0xbf767cab>)
+4006dd55:	0020c0        	memw
+4006dd58:	0898      	l32i.n	a9, a8, 0
+{
+4006dd5a:	742020        	extui	a2, a2, 0, 8
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
+4006dd5d:	1099a0        	and	a9, a9, a10
+4006dd60:	090216        	beqz	a2, 4006ddf4 <local_rtc_clk_apll_enable+0xa8>
+4006dd63:	0020c0        	memw
+4006dd66:	0899      	s32i.n	a9, a8, 0
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
+4006dd68:	0020c0        	memw
+4006dd6b:	0898      	l32i.n	a9, a8, 0
+4006dd6d:	ffe621        	l32r	a2, 4006dd08 <sandbox_sentinel_start_inst+0x8> (feffffff <periph_module_enable+0xbef67cab>)
+
+	if (enable) {
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+4006dd70:	74f050        	extui	a15, a5, 0, 8
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
+4006dd73:	109920        	and	a9, a9, a2
+4006dd76:	ffe521        	l32r	a2, 4006dd0c <sandbox_sentinel_start_inst+0xc> (1000000 <sandbox_bss_size+0xfffffc>)
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+4006dd79:	0e0c      	movi.n	a14, 0
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
+4006dd7b:	209920        	or	a9, a9, a2
+4006dd7e:	0020c0        	memw
+4006dd81:	0899      	s32i.n	a9, a8, 0
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
+4006dd83:	5d0c      	movi.n	a13, 5
+4006dd85:	07a0c2        	movi	a12, 7
+4006dd88:	01a0b2        	movi	a11, 1
+4006dd8b:	6da0a2        	movi	a10, 109
+4006dd8e:	ffe181        	l32r	a8, 4006dd14 <sandbox_sentinel_start_inst+0x14> (40025ca8 <regi2c_ctrl_write_reg_mask>)
+4006dd91:	0008e0        	callx8	a8
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, sdm0);
+4006dd94:	74f030        	extui	a15, a3, 0, 8
+4006dd97:	0e0c      	movi.n	a14, 0
+4006dd99:	7d0c      	movi.n	a13, 7
+4006dd9b:	9c0c      	movi.n	a12, 9
+4006dd9d:	1b0c      	movi.n	a11, 1
+4006dd9f:	6da0a2        	movi	a10, 109
+4006dda2:	ffdc81        	l32r	a8, 4006dd14 <sandbox_sentinel_start_inst+0x14> (40025ca8 <regi2c_ctrl_write_reg_mask>)
+4006dda5:	0008e0        	callx8	a8
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
+4006dda8:	74f040        	extui	a15, a4, 0, 8
+4006ddab:	0e0c      	movi.n	a14, 0
+4006ddad:	7d0c      	movi.n	a13, 7
+4006ddaf:	08a0c2        	movi	a12, 8
+4006ddb2:	01a0b2        	movi	a11, 1
+4006ddb5:	6da0a2        	movi	a10, 109
+4006ddb8:	ffd781        	l32r	a8, 4006dd14 <sandbox_sentinel_start_inst+0x14> (40025ca8 <regi2c_ctrl_write_reg_mask>)
+4006ddbb:	0008e0        	callx8	a8
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_1);
+4006ddbe:	9d0c      	movi.n	a13, 9
+4006ddc0:	5c0c      	movi.n	a12, 5
+4006ddc2:	1b0c      	movi.n	a11, 1
+4006ddc4:	6da0a2        	movi	a10, 109
+4006ddc7:	ffd481        	l32r	a8, 4006dd18 <sandbox_sentinel_start_inst+0x18> (40025c74 <regi2c_ctrl_write_reg>)
+4006ddca:	0008e0        	callx8	a8
+		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_2_REV1);
+4006ddcd:	9d4c      	movi.n	a13, 73
+4006ddcf:	5c0c      	movi.n	a12, 5
+4006ddd1:	1b0c      	movi.n	a11, 1
+4006ddd3:	6da0a2        	movi	a10, 109
+4006ddd6:	ffd081        	l32r	a8, 4006dd18 <sandbox_sentinel_start_inst+0x18> (40025c74 <regi2c_ctrl_write_reg>)
+4006ddd9:	0008e0        	callx8	a8
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
+4006dddc:	4d0c      	movi.n	a13, 4
+4006ddde:	74f060        	extui	a15, a6, 0, 8
+4006dde1:	0e0c      	movi.n	a14, 0
+4006dde3:	0dcd      	mov.n	a12, a13
+4006dde5:	1b0c      	movi.n	a11, 1
+4006dde7:	6da0a2        	movi	a10, 109
+4006ddea:	ffca81        	l32r	a8, 4006dd14 <sandbox_sentinel_start_inst+0x14> (40025ca8 <regi2c_ctrl_write_reg_mask>)
+4006dded:	0008e0        	callx8	a8
+	}
+}
+4006ddf0:	0006c6        	j	4006de0f <local_rtc_clk_apll_enable+0xc3>
+4006ddf3:	00          	.byte 00
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
+4006ddf4:	ffc721        	l32r	a2, 4006dd10 <sandbox_sentinel_start_inst+0x10> (800000 <sandbox_bss_size+0x7ffffc>)
+4006ddf7:	209920        	or	a9, a9, a2
+4006ddfa:	0020c0        	memw
+4006ddfd:	0899      	s32i.n	a9, a8, 0
+	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
+4006ddff:	0020c0        	memw
+4006de02:	0838      	l32i.n	a3, a8, 0
+4006de04:	ffc121        	l32r	a2, 4006dd08 <sandbox_sentinel_start_inst+0x8> (feffffff <periph_module_enable+0xbef67cab>)
+4006de07:	103320        	and	a3, a3, a2
+4006de0a:	0020c0        	memw
+4006de0d:	0839      	s32i.n	a3, a8, 0
+}
+4006de0f:	f01d      	retw.n
+4006de11:	000000        	ill
+
+4006de14 <apll_quick_update>:
+
+void apll_quick_update( uint32_t sdm )
+{
+4006de14:	004136        	entry	a1, 32
+	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM2, sdm>>16);
+	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM0, (sdm&0xff));
+	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM1, (sdm>>8)&0xff);
+	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm>>16);
+4006de17:	75d020        	extui	a13, a2, 16, 8
+4006de1a:	7c0c      	movi.n	a12, 7
+4006de1c:	01a0b2        	movi	a11, 1
+4006de1f:	6da0a2        	movi	a10, 109
+4006de22:	ffbe81        	l32r	a8, 4006dd1c <sandbox_sentinel_start_inst+0x1c> (40027d7c <esp_rom_regi2c_write>)
+4006de25:	0008e0        	callx8	a8
+	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_DSDM0, I2C_APLL_DSDM0, (sdm&0xff));
+4006de28:	9c0c      	movi.n	a12, 9
+4006de2a:	74d020        	extui	a13, a2, 0, 8
+4006de2d:	0cbd      	mov.n	a11, a12
+4006de2f:	6da0a2        	movi	a10, 109
+4006de32:	ffba81        	l32r	a8, 4006dd1c <sandbox_sentinel_start_inst+0x1c> (40027d7c <esp_rom_regi2c_write>)
+4006de35:	0008e0        	callx8	a8
+	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_DSDM1, I2C_APLL_DSDM1, (sdm>>8)&0xff);
+4006de38:	8c0c      	movi.n	a12, 8
+4006de3a:	74d820        	extui	a13, a2, 8, 8
+4006de3d:	0cbd      	mov.n	a11, a12
+4006de3f:	6da0a2        	movi	a10, 109
+4006de42:	ffb681        	l32r	a8, 4006dd1c <sandbox_sentinel_start_inst+0x1c> (40027d7c <esp_rom_regi2c_write>)
+4006de45:	0008e0        	callx8	a8
+
+}
+4006de48:	f01d      	retw.n
+	...
+
+4006de4c <sandbox_tick>:
+}
+
+
+uint32_t frame = 0;
+void sandbox_tick()
+{
+4006de4c:	004136        	entry	a1, 32
+	//uprintf( "%08x\n", REGI2C_READ(I2C_APLL, I2C_APLL_DSDM2 ));
+	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
+int jj;
+for( jj = 0; jj < 33; jj ++ )
+4006de4f:	ffb441        	l32r	a4, 4006dd20 <sandbox_sentinel_start_inst+0x20> (3fffdf30 <frame>)
+4006de52:	ffb461        	l32r	a6, 4006dd24 <sandbox_sentinel_start_inst+0x24> (1161f82 <sandbox_bss_size+0x1161f7e>)
+4006de55:	ffb451        	l32r	a5, 4006dd28 <sandbox_sentinel_start_inst+0x28> (cccccccd <periph_module_enable+0x8cc34979>)
+{
+4006de58:	172c      	movi.n	a7, 33
+
+
+	int fplv = 0;
+	frame+=6;
+	//if( frame > 2000 ) frame -= 2000;
+	if( frame & 0x400 )
+4006de5a:	00a432        	movi	a3, 0x400
+	{
+		fplv = frame & 0x3ff;
+	}
+	else
+	{
+		fplv = 0x3ff - (frame & 0x3ff);
+4006de5d:	ffaf22        	movi	a2, -1
+	frame+=6;
+4006de60:	0498      	l32i.n	a9, a4, 0
+4006de62:	996b      	addi.n	a9, a9, 6
+		fplv = 0x3ff - (frame & 0x3ff);
+4006de64:	30a290        	xor	a10, a2, a9
+	frame+=6;
+4006de67:	0499      	s32i.n	a9, a4, 0
+		fplv = 0x3ff - (frame & 0x3ff);
+4006de69:	94a0a0        	extui	a10, a10, 0, 10
+	if( frame & 0x400 )
+4006de6c:	050937        	bnone	a9, a3, 4006de75 <sandbox_tick+0x29>
+		fplv = frame & 0x3ff;
+4006de6f:	94a090        	extui	a10, a9, 0, 10
+4006de72:	ffffc6        	j	4006de75 <sandbox_tick+0x29>
+	}
+
+	fplv *= 4;
+
+
+	codeTarg += fplv;
+4006de75:	a0aa60        	addx4	a10, a10, a6
+
+	uint32_t sdm = (codeTarg / 40 * 2 - 4 * 65536);
+4006de78:	a2aa50        	muluh	a10, a10, a5
+4006de7b:	ffac81        	l32r	a8, 4006dd2c <sandbox_sentinel_start_inst+0x2c> (7ffe0000 <periph_module_enable+0x3ff47cac>)
+4006de7e:	41a5a0        	srli	a10, a10, 5
+4006de81:	aa8a      	add.n	a10, a10, a8
+for( jj = 0; jj < 33; jj ++ )
+4006de83:	770b      	addi.n	a7, a7, -1
+	apll_quick_update( sdm );
+4006de85:	aaaa      	add.n	a10, a10, a10
+4006de87:	201110        	or	a1, a1, a1
+4006de8a:	fff8a5        	call8	4006de14 <apll_quick_update>
+for( jj = 0; jj < 33; jj ++ )
+4006de8d:	fcf756        	bnez	a7, 4006de60 <sandbox_tick+0x14>
+}
+//	vTaskDelay( 1 );
+}
+4006de90:	f01d      	retw.n
+	...
+
+4006de94 <sandbox_main>:
+{
+4006de94:	004136        	entry	a1, 32
+	uprintf( "sandbox_main()\n" );
+4006de97:	ffa6a1        	l32r	a10, 4006dd30 <sandbox_sentinel_start_inst+0x30> (3fffdf10 <sandbox_sentinel_start_data>)
+4006de9a:	ffa881        	l32r	a8, 4006dd3c <sandbox_sentinel_start_inst+0x3c> (40085360 <uprintf>)
+4006de9d:	0008e0        	callx8	a8
+					gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_3 );
+4006dea0:	3b0c      	movi.n	a11, 3
+4006dea2:	2a0c      	movi.n	a10, 2
+4006dea4:	ffa781        	l32r	a8, 4006dd40 <sandbox_sentinel_start_inst+0x40> (40088198 <gpio_set_drive_capability>)
+4006dea7:	0008e0        	callx8	a8
+					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+4006deaa:	0d0c      	movi.n	a13, 0
+4006deac:	1c0c      	movi.n	a12, 1
+4006deae:	fba0b2        	movi	a11, 251
+4006deb1:	02a0a2        	movi	a10, 2
+4006deb4:	ffa481        	l32r	a8, 4006dd44 <sandbox_sentinel_start_inst+0x44> (40019460 <gpio_matrix_out>)
+4006deb7:	0008e0        	callx8	a8
+					periph_module_enable(PERIPH_I2S0_MODULE);
+4006deba:	6a0c      	movi.n	a10, 6
+4006debc:	ffa381        	l32r	a8, 4006dd48 <sandbox_sentinel_start_inst+0x48> (40098354 <periph_module_enable>)
+4006debf:	0008e0        	callx8	a8
+					local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
+4006dec2:	0e0c      	movi.n	a14, 0
+4006dec4:	8d0c      	movi.n	a13, 8
+4006dec6:	e6a0c2        	movi	a12, 230
+4006dec9:	64a0b2        	movi	a11, 100
+4006decc:	1a0c      	movi.n	a10, 1
+4006dece:	201110        	or	a1, a1, a1
+4006ded1:	ffe7a5        	call8	4006dd4c <local_rtc_clk_apll_enable>
+						WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (1<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );
+4006ded4:	ff9881        	l32r	a8, 4006dd34 <sandbox_sentinel_start_inst+0x34> (3f40f0ac <sandbox_bss_size+0x3f40f0a8>)
+4006ded7:	ff9891        	l32r	a9, 4006dd38 <sandbox_sentinel_start_inst+0x38> (300001 <sandbox_bss_size+0x2ffffd>)
+4006deda:	0020c0        	memw
+4006dedd:	0899      	s32i.n	a9, a8, 0
+}
+4006dedf:	f01d      	retw.n
+4006dee1:	00          	.byte 00
+	...
+
+4006dee4 <_advanced_usb_printf_head>:
+4006dee4:	ac          	.byte 0xac
+4006dee5:	09          	.byte 0x9
+4006dee6:	fc          	.byte 0xfc
+4006dee7:	3f          	.byte 0x3f
+
+4006dee8 <_GPIO_IN_REG>:
+4006dee8:	3c          	.byte 0x3c
+4006dee9:	40          	.byte 0x40
+4006deea:	40          	.byte 0x40
+4006deeb:	3f          	.byte 0x3f
+
+4006deec <test_function>:
+#  value read from advanced_usb_printf_head
+#
+.align 4
+.global test_function
+test_function:
+	entry sp, 32       # This saves off some of the registers we're using
+4006deec:	004136        	entry	a1, 32
+	l32r a3, _advanced_usb_printf_head
+4006deef:	fffd31        	l32r	a3, 4006dee4 <_advanced_usb_printf_head> (3ffc09ac <advanced_usb_printf_head>)
+	slli a2, a2, 16    # Putting this code here hides the latency from the l32r
+4006def2:	112200        	slli	a2, a2, 16
+	l32i a3, a3, 0
+4006def5:	0338      	l32i.n	a3, a3, 0
+	or a2, a2, a3
+4006def7:	202230        	or	a2, a2, a3
+	retw              # This restores the registers.
+4006defa:	f01d      	retw.n
+
+4006defc <minimal_function>:
+
+.align 4
+.global minimal_function
+minimal_function:
+	entry	sp, 16
+4006defc:	002136        	entry	a1, 16
+	retw
+4006deff:	f01d      	retw.n
+4006df01:	000000        	ill
+
+4006df04 <asm_read_gpio>:
+
+
+.align 4
+.global asm_read_gpio
+asm_read_gpio:
+	entry	sp, 16
+4006df04:	002136        	entry	a1, 16
+
+	l32r a2, _GPIO_IN_REG
+4006df07:	fff821        	l32r	a2, 4006dee8 <_GPIO_IN_REG> (3f40403c <sandbox_bss_size+0x3f404038>)
+
+	# you can actually fit 6 instructions in here, for free if they don't rely on the result.
+	# Most of the time it doesn't work out that nicely, but here it happened to.
+	# l32r's are really, _realy_ slow.
+
+	l32i a2, a2, 0
+4006df0a:	0228      	l32i.n	a2, a2, 0
+	retw
+4006df0c:	f01d      	retw.n
