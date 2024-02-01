@@ -60,10 +60,91 @@ static inline uint32_t getCycleCount()
 #include "esp_private/regi2c_ctrl.h"
 #include "hal/clk_tree_ll.h"
 
+#include "siggen.h"
+
+
+
+
+#define I2C_RTC_WIFI_CLK_EN (SYSCON_WIFI_CLK_EN_REG)
+
+#define I2C_RTC_CLK_GATE_EN    (BIT(18))
+#define I2C_RTC_CLK_GATE_EN_M  (BIT(18))
+#define I2C_RTC_CLK_GATE_EN_V  0x1
+#define I2C_RTC_CLK_GATE_EN_S  18
+
+#define I2C_RTC_CONFIG0  0x6000e048
+
+#define I2C_RTC_MAGIC_CTRL 0x00001FFF
+#define I2C_RTC_MAGIC_CTRL_M  ((I2C_RTC_MAGIC_CTRL_V)<<(I2C_RTC_MAGIC_CTRL_S))
+#define I2C_RTC_MAGIC_CTRL_V  0x1FFF
+#define I2C_RTC_MAGIC_CTRL_S  4
+
+#define I2C_RTC_CONFIG1  0x6000e044
+
+#define I2C_RTC_BOD_MASK (BIT(22))
+#define I2C_RTC_BOD_MASK_M  (BIT(22))
+#define I2C_RTC_BOD_MASK_V  0x1
+#define I2C_RTC_BOD_MASK_S  22
+
+#define I2C_RTC_SAR_MASK (BIT(18))
+#define I2C_RTC_SAR_MASK_M  (BIT(18))
+#define I2C_RTC_SAR_MASK_V  0x1
+#define I2C_RTC_SAR_MASK_S  18
+
+#define I2C_RTC_BBPLL_MASK (BIT(17))
+#define I2C_RTC_BBPLL_MASK_M  (BIT(17))
+#define I2C_RTC_BBPLL_MASK_V  0x1
+#define I2C_RTC_BBPLL_MASK_S  17
+
+#define I2C_RTC_APLL_MASK (BIT(14))
+#define I2C_RTC_APLL_MASK_M  (BIT(14))
+#define I2C_RTC_APLL_MASK_V  0x1
+#define I2C_RTC_APLL_MASK_S  14
+
+#define I2C_RTC_ALL_MASK 0x00007FFF
+#define I2C_RTC_ALL_MASK_M  ((I2C_RTC_ALL_MASK_V)<<(I2C_RTC_ALL_MASK_S))
+#define I2C_RTC_ALL_MASK_V  0x7FFF
+#define I2C_RTC_ALL_MASK_S  8
+
+#define I2C_RTC_CONFIG2  0x6000e000
+
+#define I2C_RTC_BUSY (BIT(25))
+#define I2C_RTC_BUSY_M  (BIT(25))
+#define I2C_RTC_BUSY_V  0x1
+#define I2C_RTC_BUSY_S  25
+
+#define I2C_RTC_WR_CNTL (BIT(24))
+#define I2C_RTC_WR_CNTL_M  (BIT(24))
+#define I2C_RTC_WR_CNTL_V  0x1
+#define I2C_RTC_WR_CNTL_S  24
+
+#define I2C_RTC_DATA 0x000000FF
+#define I2C_RTC_DATA_M  ((I2C_RTC_DATA_V)<<(I2C_RTC_DATA_S))
+#define I2C_RTC_DATA_V  0xFF
+#define I2C_RTC_DATA_S  16
+
+#define I2C_RTC_ADDR 0x000000FF
+#define I2C_RTC_ADDR_M  ((I2C_RTC_ADDR_V)<<(I2C_RTC_ADDR_S))
+#define I2C_RTC_ADDR_V  0xFF
+#define I2C_RTC_ADDR_S  8
+
+#define I2C_RTC_SLAVE_ID 0x000000FF
+#define I2C_RTC_SLAVE_ID_M  ((I2C_RTC_SLAVE_ID_V)<<(I2C_RTC_SLAVE_ID_S))
+#define I2C_RTC_SLAVE_ID_V  0xFF
+#define I2C_RTC_SLAVE_ID_S  0
+
+#define I2C_RTC_MAGIC_DEFAULT (0x1c40)
+
+#define I2C_BOD     0x61
+#define I2C_BBPLL   0x66
+#define I2C_SAR_ADC 0X69
+#define I2C_APLL    0X6D
+
+
 // Configures APLL = 480 / 4 = 120
 // 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
 // Datasheet recommends that numerator does not exceed 500MHz.
-void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm2, uint32_t o_div)
+void IRAM_ATTR local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm2, uint32_t o_div)
 {
 	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
 	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
@@ -78,15 +159,23 @@ void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32
 	}
 }
 
+
+void IRAM_ATTR regi2c_write_reg_raw_local(uint8_t block, uint8_t host_id, uint8_t reg_add, uint8_t data)
+{
+    uint32_t temp = ((block & I2C_RTC_SLAVE_ID_V) << I2C_RTC_SLAVE_ID_S)
+                    | ((reg_add & I2C_RTC_ADDR_V) << I2C_RTC_ADDR_S)
+                    | ((0x1 & I2C_RTC_WR_CNTL_V) << I2C_RTC_WR_CNTL_S)
+                    | (((uint32_t)data & I2C_RTC_DATA_V) << I2C_RTC_DATA_S);
+    while (REG_GET_BIT(I2C_RTC_CONFIG2, I2C_RTC_BUSY));
+    REG_WRITE(I2C_RTC_CONFIG2, temp);
+}
+
+
 void apll_quick_update( uint32_t sdm )
 {
-	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM2, sdm>>16);
-	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM0, (sdm&0xff));
-	//REGI2C_WRITE(I2C_APLL, I2C_APLL_DSDM1, (sdm>>8)&0xff);
-	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm>>16);
-	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_DSDM0, I2C_APLL_DSDM0, (sdm&0xff));
-	regi2c_write_reg_raw(I2C_APLL, I2C_APLL_DSDM1, I2C_APLL_DSDM1, (sdm>>8)&0xff);
-
+	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm>>16);
+	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM0, (sdm&0xff));
+	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM1, (sdm>>8)&0xff);
 }
 
 
@@ -95,35 +184,35 @@ void sandbox_main()
 {
 	uprintf( "sandbox_main()\n" );
 
-					// Output clock on P2.
+	// Output clock on P2.
 
-					// Maximize the drive strength.
-					gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_3 );
+	// Maximize the drive strength.
+	gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_3 );
 
-					// Use the IO matrix to create the inverse of TX on pin 17.
-					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+	// Use the IO matrix to create the inverse of TX on pin 17.
+	gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 
-					periph_module_enable(PERIPH_I2S0_MODULE);
+	periph_module_enable(PERIPH_I2S0_MODULE);
 
-					int use_apll = 1;
-					int sdm0 = 100;
-					int sdm1 = 230;
-					int sdm2 = 8;
-					int odiv = 0;
+	int use_apll = 1;
+	int sdm0 = 100;
+	int sdm1 = 230;
+	int sdm2 = 8;
+	int odiv = 0;
 
-					local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
+	local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
 
-					if( use_apll )
-					{
-						WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (1<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );
-					}
-					else
-					{
-						// fI2S = fCLK / ( N + B/A )
-						// DIV_NUM = N
-						// Note I2S_CLKM_DIV_NUM minimum = 2 by datasheet.  Less than that and it will ignoreeee you.
-						WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
-					}
+	if( use_apll )
+	{
+		WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (1<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );
+	}
+	else
+	{
+		// fI2S = fCLK / ( N + B/A )
+		// DIV_NUM = N
+		// Note I2S_CLKM_DIV_NUM minimum = 2 by datasheet.  Less than that and it will ignoreeee you.
+		WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
+	}
 
 }
 
@@ -133,39 +222,32 @@ void sandbox_tick()
 {
 	//uprintf( "%08x\n", REGI2C_READ(I2C_APLL, I2C_APLL_DSDM2 ));
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
-int jj;
-for( jj = 0; jj < 33; jj ++ )
-{
-	// 3.25 is the harmonic
-	// Why 3.25??? I have NO IDEA
-	// I was just experimenting and 3.25 is loud.
-	float fTarg = (903.9)/13.0;
-
-	// We are actually / /4 in reality. Because of the hardware divisors in the chip.
-
-	uint32_t codeTarg = fTarg * 65536 * 4;
 
 
-	int fplv = 0;
-	frame+=6;
-	//if( frame > 2000 ) frame -= 2000;
-	if( frame & 0x400 )
+		// 3.25 is the harmonic
+		// Why 3.25??? I have NO IDEA
+		// I was just experimenting and 3.25 is loud.
+		float fTarg = (903.9)/13.0;
+
+		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
+
+		uint32_t codeTarg = fTarg * 65536 * 4;
+
+	int jj;
+	for( jj = 0; jj < 33; jj ++ )
 	{
-		fplv = frame & 0x3ff;
+
+		int fplv = 0;
+
+		// Send every second
+		frame = getCycleCount() % 240000000;
+		fplv = SigGen( frame, codeTarg );
+
+		uint32_t codeTargUse = codeTarg + fplv;
+
+		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
+		apll_quick_update( sdm );
 	}
-	else
-	{
-		fplv = 0x3ff - (frame & 0x3ff);
-	}
-
-	fplv *= 4;
-
-
-	codeTarg += fplv;
-
-	uint32_t sdm = (codeTarg / 40 * 2 - 4 * 65536);
-	apll_quick_update( sdm );
-}
 //	vTaskDelay( 1 );
 }
 
