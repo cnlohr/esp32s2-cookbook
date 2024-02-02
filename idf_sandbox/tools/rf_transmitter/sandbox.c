@@ -251,6 +251,7 @@ void sandbox_tick()
 		uint32_t codeTarg = fTarg * 65536 * 4;
 
 #if 0
+	// For DEBUGGING ONLY
 	int k;
 //DisableISR();
 	for( k = 0; k < 33; k++ )
@@ -259,7 +260,7 @@ void sandbox_tick()
 
 		// Send every second
 		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()) % 120000000;
+		frame = (getCycleCount()/200) % 120000000;
 		fplv = SigGen( frame, codeTarg );
 		uint32_t codeTargUse = codeTarg + fplv;
 		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
@@ -267,9 +268,8 @@ void sandbox_tick()
 		if( fplv < 0 ) break;
 	}
 //EnableISR();
-#endif
+#else
 
-#if 1
 		frame = (getCycleCount()) % 240000000;
 	if( frame < 1000000 )
 	{

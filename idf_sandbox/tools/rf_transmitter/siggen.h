@@ -14,6 +14,7 @@ uint16_t symbols[MAX_SYMBOLS];
 static void SigSetupTest()
 {
 	memset( symbols, 0, sizeof( symbols ) );
+	symbols_len = 5;
 	CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, 7+ADDSF );
 
 	int j;
@@ -25,7 +26,7 @@ static void SigSetupTest()
 	{
 		//symbols[j] = 255 - symbols[j] ;
 		//symbols[j] =  255 - (uint8_t)(symbols[j] + 0);
-		//uprintf( "%d: %02x\n", j, symbols[j] );
+		uprintf( "%d: %02x\n", j, symbols[j] );
 	}
 }
 
@@ -51,8 +52,8 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	// Fully use the 125000 Hz channel Bandwidth.
 	#define DESPREAD (100*MARK_FROM_SF7)
 
-	#define CHIPRATE 976 // SF7 (1.024 ms)
-	#define CHIPSSPREAD (240000000*MARK_FROM_SF7/CHIPRATE)
+	#define CHIPRATE .001024 // SF7 (1.024 ms) / 976Chips/s
+	#define CHIPSSPREAD ((uint32_t)(240000000*MARK_FROM_SF7*CHIPRATE))
 
 	// TODO: Get some of these encode things going: https://github.com/myriadrf/LoRa-SDR/blob/master/LoRaCodes.hpp
 
@@ -72,19 +73,28 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 		return ((placeInSweep /*+ 240000/2*/) % CHIPSSPREAD) / DESPREAD;			
 	}
 
-#define YES_USE_TWO_BYTES_BEFORE_DOWN 0
-#if YES_USE_TWO_BYTES_BEFORE_DOWN
+	// Last 2 codes here are for the sync word.
+
+#define SYNC_WORD
+#ifdef SYNC_WORD
 	// https://static1.squarespace.com/static/54cecce7e4b054df1848b5f9/t/57489e6e07eaa0105215dc6c/1464376943218/Reversing-Lora-Knight.pdf
 	// Says that this does not exist.  but, it does seem to exist in some of their waterfalls. 
 	sectionQuarterNumber -= 4*2;
 	// Two symbols
 	if( sectionQuarterNumber < 0 )
 	{
+		uint32_t SYNCWORD = 0; //0x34 for some vendors?
 		int32_t  chirp = (8+sectionQuarterNumber)/4;
-		int32_t  offset = chirp * 100000;
-		return (( placeInSweep + offset) % 240000) / DESPREAD;			
+		int32_t  offset = SYNCWORD * CHIPSSPREAD / (MARK_FROM_SF7*128);
+		return (( placeInSweep + offset) % CHIPSSPREAD) / DESPREAD;			
 	}
 #endif
+/*
+
+	EXTRA NOTES: GNURadio says to look for sync word 18
+*/
+
+
 
 	sectionQuarterNumber -= 9;
 
@@ -94,17 +104,18 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 		return ((CHIPSSPREAD-placeInSweep/*+240000/2*/) % CHIPSSPREAD) / DESPREAD;				
 	}
 
-	uint32_t chirp = (sectionQuarterNumber)/4 + YES_USE_TWO_BYTES_BEFORE_DOWN*2;
+	uint32_t chirp = (sectionQuarterNumber)/4;
 	if( chirp < symbols_len )
 	{
 		placeInSweep += (CHIPSSPREAD*3/4);
-		uint32_t offset = symbols[chirp] * CHIPSSPREAD / (MARK_FROM_SF7*128);
+		uint32_t offset = ( symbols[chirp] + 0 ) * CHIPSSPREAD / (MARK_FROM_SF7*128);
 		fplv = ((placeInSweep + offset) % CHIPSSPREAD) / DESPREAD;
 		return fplv;
 	}
 	else
 	{
-		return -codeTarg;
+		//return -codeTarg;
+		return -1;
 	}
 }
 
