@@ -231,6 +231,11 @@ void sandbox_main()
 }
 
 
+
+#define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
+#define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
+
+
 uint32_t frame = 0;
 void sandbox_tick()
 {
@@ -238,31 +243,55 @@ void sandbox_tick()
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
 
-		// 3.25 is the harmonic
-		// Why 3.25??? I have NO IDEA
-		// I was just experimenting and 3.25 is loud.
-		float fTarg = (903.85)/13.0;
+		// 13rd harmonic.  
+		float fTarg = (903.9-0.05)/13.0;
 
 		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
 
 		uint32_t codeTarg = fTarg * 65536 * 4;
 
-	int jj;
-	for( jj = 0; jj < 33; jj ++ )
+#if 0
+	int k;
+//DisableISR();
+	for( k = 0; k < 33; k++ )
 	{
-
 		int fplv = 0;
 
 		// Send every second
 		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()) % 240000000;
+		frame = (getCycleCount()) % 120000000;
 		fplv = SigGen( frame, codeTarg );
-
 		uint32_t codeTargUse = codeTarg + fplv;
-
 		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
 		apll_quick_update( sdm );
+		if( fplv < 0 ) break;
 	}
+//EnableISR();
+#endif
+
+#if 1
+		frame = (getCycleCount()) % 240000000;
+	if( frame < 1000000 )
+	{
+SigSetupTest();
+DisableISR();
+while(1)
+{
+		int fplv = 0;
+		// Send every second
+		// If you want to dialate time, do it here. 
+		frame = (getCycleCount()) % 240000000;
+		fplv = SigGen( frame, codeTarg );
+		uint32_t codeTargUse = codeTarg + fplv;
+		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
+		apll_quick_update( sdm );
+		if( fplv < 0 ) break;
+	}
+EnableISR();
+
+}
+#endif
+
 //	vTaskDelay( 1 );
 }
 

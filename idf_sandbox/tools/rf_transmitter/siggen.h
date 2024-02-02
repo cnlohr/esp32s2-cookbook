@@ -5,7 +5,7 @@
 #include "LoRa-SDR-Code.h"
 
 
-#define ADDSF 1 // SF8
+#define ADDSF 1 // SF8 = 1
 
 #define MAX_SYMBOLS 200
 int     symbols_len = 1;
@@ -13,17 +13,23 @@ uint16_t symbols[MAX_SYMBOLS];
 
 static void SigSetupTest()
 {
+	memset( symbols, 0, sizeof( symbols ) );
 	CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, 7+ADDSF );
-/*
+
 	int j;
+	//for( j = 0; j < symbols_len; j++ )
+	//	symbols[j] = 255 - symbols[j];
+
+//	int j;
 	for( j = 0; j < symbols_len; j++ )
 	{
-		fprintf( stderr, "%d: %02x\n", j, symbols[j] );
+		//symbols[j] = 255 - symbols[j] ;
+		//symbols[j] =  255 - (uint8_t)(symbols[j] + 0);
+		//uprintf( "%d: %02x\n", j, symbols[j] );
 	}
-*/
 }
 
-static uint32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
+static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 {
 	uint32_t fplv = 0;
 	// https://electronics.stackexchange.com/questions/278192/understanding-the-relationship-between-lora-chips-chirps-symbols-and-bits
@@ -45,8 +51,8 @@ static uint32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	// Fully use the 125000 Hz channel Bandwidth.
 	#define DESPREAD (100*MARK_FROM_SF7)
 
-	#define CHIPRATE 976/MARK_FROM_SF7 // SF7 (1.024 ms)
-	#define CHIPSSPREAD (240000000/(CHIPRATE))
+	#define CHIPRATE 976 // SF7 (1.024 ms)
+	#define CHIPSSPREAD (240000000*MARK_FROM_SF7/CHIPRATE)
 
 	// TODO: Get some of these encode things going: https://github.com/myriadrf/LoRa-SDR/blob/master/LoRaCodes.hpp
 
@@ -67,7 +73,6 @@ static uint32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	}
 
 #define YES_USE_TWO_BYTES_BEFORE_DOWN 0
-
 #if YES_USE_TWO_BYTES_BEFORE_DOWN
 	// https://static1.squarespace.com/static/54cecce7e4b054df1848b5f9/t/57489e6e07eaa0105215dc6c/1464376943218/Reversing-Lora-Knight.pdf
 	// Says that this does not exist.  but, it does seem to exist in some of their waterfalls. 
