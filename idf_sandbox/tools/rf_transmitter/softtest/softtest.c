@@ -7,7 +7,7 @@ int main()
 	SigSetupTest();
 
 	int frame;
-	for( frame = 0; frame < 2000; frame++ )
+	for( frame = 0; frame < 9000; frame++ )
 	{
 		uint32_t ltime = frame;
 		uint32_t clock = ltime * 2400;

@@ -173,9 +173,22 @@ void IRAM_ATTR regi2c_write_reg_raw_local(uint8_t block, uint8_t host_id, uint8_
 
 void apll_quick_update( uint32_t sdm )
 {
-	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm>>16);
-	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM0, (sdm&0xff));
-	regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM1, (sdm>>8)&0xff);
+	uint8_t sdm2 = sdm>>16;
+	uint8_t sdm1 = (sdm>>8)&0xff;
+	uint8_t sdm0 = (sdm>>0)&0xff;
+	static uint8_t last_sdm_0;
+	static uint8_t last_sdm_1;
+	static uint8_t last_sdm_2;
+	if( sdm2 != last_sdm_2 )
+		regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm2);
+	if( sdm0 != last_sdm_0 ) 
+		regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM0, sdm0);
+	if( sdm1 != last_sdm_1 )
+		regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM1, sdm1);
+
+//	last_sdm_2 = sdm2;
+//	last_sdm_1 = sdm1;
+//	last_sdm_0 = sdm0;
 }
 
 
@@ -214,6 +227,7 @@ void sandbox_main()
 		WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
 	}
 
+	SigSetupTest();
 }
 
 
@@ -227,7 +241,7 @@ void sandbox_tick()
 		// 3.25 is the harmonic
 		// Why 3.25??? I have NO IDEA
 		// I was just experimenting and 3.25 is loud.
-		float fTarg = (903.9)/13.0;
+		float fTarg = (903.85)/13.0;
 
 		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
 
@@ -240,7 +254,8 @@ void sandbox_tick()
 		int fplv = 0;
 
 		// Send every second
-		frame = getCycleCount() % 240000000;
+		// If you want to dialate time, do it here. 
+		frame = (getCycleCount()) % 240000000;
 		fplv = SigGen( frame, codeTarg );
 
 		uint32_t codeTargUse = codeTarg + fplv;

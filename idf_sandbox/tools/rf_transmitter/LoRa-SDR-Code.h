@@ -395,7 +395,8 @@ static void diagonalDeterleaveSx(const uint16_t *symbols, const size_t numSymbol
 	}
 }
 
-static void diagonalDeterleaveSx2(const uint16_t *symbols, const size_t numSymbols, uint8_t *codewords, const size_t PPM, const size_t RDD){
+static void diagonalDeterleaveSx2(const uint16_t *symbols, const size_t numSymbols, uint8_t *codewords, const size_t PPM, const size_t RDD)
+{
 	size_t nb = RDD + 4;
 	for (size_t x = 0; x < numSymbols / nb; x++) {
 		const size_t cwOff = x*PPM;
@@ -413,40 +414,86 @@ static void diagonalDeterleaveSx2(const uint16_t *symbols, const size_t numSymbo
 
 
 
-static void CreateMessageFromPayload( )
+static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, size_t * dOfs, const uint8_t *bytes, const size_t count)
 {
-	int inPort = this->input(0);
-	int outPort = this->output(0);
-	if (not inPort->hasMessage()) return;
+	if (RDD == 0) for (size_t i = 0; i < count; i++, dOfs++) {
+		if ((*dOfs) & 1)
+			codewords[(*cOfs)++] = bytes[(*dOfs) >> 1] >> 4;
+		else
+			codewords[(*cOfs)++] = bytes[(*dOfs) >> 1] & 0xf;
+	} else if (RDD == 1) for (size_t i = 0; i < count; i++, (*dOfs)++) {
+		if ((*dOfs) & 1)
+			codewords[(*cOfs)++] = encodeParity54(bytes[(*dOfs) >> 1] >> 4);
+		else
+			codewords[(*cOfs)++] = encodeParity54(bytes[(*dOfs) >> 1] & 0xf);
+	} else if (RDD == 2) for (size_t i = 0; i < count; i++, (*dOfs)++) {
+		if ((*dOfs) & 1)
+			codewords[(*cOfs)++] = encodeParity64(bytes[(*dOfs) >> 1] >> 4);
+		else
+			codewords[(*cOfs)++] = encodeParity64(bytes[(*dOfs) >> 1] & 0xf);
+	} else if (RDD == 3) for (size_t i = 0; i < count; i++, (*dOfs)++) {
+		if ((*dOfs) & 1)
+			codewords[(*cOfs)++] = encodeHamming74sx(bytes[(*dOfs) >> 1] >> 4);
+		else
+			codewords[(*cOfs)++] = encodeHamming74sx(bytes[(*dOfs) >> 1] & 0xf);
+	} else if (RDD == 4) for (size_t i = 0; i < count; i++, (*dOfs)++) {
+		if ((*dOfs) & 1)
+			codewords[(*cOfs)++] = encodeHamming84sx(bytes[(*dOfs) >> 1] >> 4);
+		else
+			codewords[(*cOfs)++] = encodeHamming84sx(bytes[(*dOfs) >> 1] & 0xf);
+	}
+}
+
+
+
+static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
+{
+	// Payload may have 2 extra bytes for CRC.
+	uint8_t payload_in[20] = { 0xaa, 0xbb, 0xcc, }; 
+	int payload_in_size = 3;
+	int _rdd = 4; // 4/8 Coding Rate
+	int _whitening = 1; // Enable whitening
+	int _crc = 1; // Enable CRC.
+
+	const int _ppm = 0;
 	const size_t PPM = (_ppm == 0) ? _sf : _ppm;
-	if (PPM > _sf) throw Pothos::Exception("LoRaEncoder::work()", "failed check: PPM <= SF");
+
+	uint8_t codewords[1024];
+	int _explicit = 1;
 
 	//extract the input bytes
-	int msg = inPort->popMessage();
-	int pkt = msg.extract<Pothos::Packet>();
-	size_t payloadLength = pkt.payload.length + (_crc ? 2 : 0);
-	std::vector<uint8_t> bytes(payloadLength);
-	std::memcpy(bytes.data(), pkt.payload.as<const void *>(), pkt.payload.length);
+//	int msg = inPort->popMessage();
+//	int pkt = msg.extract<Pothos::Packet>();
+//	size_t payloadLength = pkt.payload.length + (_crc ? 2 : 0);
+//	std::vector<uint8_t> bytes(payloadLength);
+//	std::memcpy(bytes.data(), pkt.payload.as<const void *>(), pkt.payload.length);
 			
-	const size_t numCodewords = roundUp(bytes.size() * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
+	const size_t numCodewords = roundUp( payload_in_size * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
 	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8 bits
+
+	if( numSymbols >= max_symbols )
+	{
+		//fprintf( stderr, "Error: Too many symbols to fit\n" );
+		return -1;
+	}
 	
 	size_t cOfs = 0;
 	size_t dOfs = 0;
-	std::vector<uint8_t> codewords(numCodewords);
+
+	//std::vector<uint8_t> codewords(numCodewords);
 
 	if (_crc) {
-		uint16_t crc = sx1272DataChecksum(bytes.data(),  pkt.payload.length);
-		bytes[pkt.payload.length] = crc & 0xff;
-		bytes[pkt.payload.length+1] = (crc >> 8) & 0xff;
+		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
+		payload_in[payload_in_size] = crc & 0xff;
+		payload_in[payload_in_size+1] = (crc >> 8) & 0xff;
 	}
 
 	if (_explicit) {
-		std::vector<uint8_t> hdr(3);
-		uint8_t len = pkt.payload.length;
+		uint8_t hdr[3];
+		uint8_t len = payload_in_size;
 		hdr[0] = len;
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
-		hdr[2] = headerChecksum(hdr.data());
+		hdr[2] = headerChecksum(hdr);
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
@@ -454,69 +501,43 @@ static void CreateMessageFromPayload( )
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] >> 4);		// checksum
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] & 0xf);
 	}
+
 	size_t cOfs1 = cOfs;
-	encodeFec(codewords, 4, cOfs, dOfs, bytes.data(), PPM - cOfs);
+
+	encodeFec(codewords, 4, &cOfs, &dOfs, payload_in, PPM - cOfs);
 	if (_whitening) {
-		Sx1272ComputeWhitening(codewords.data() + cOfs1, PPM - cOfs1, 0, HEADER_RDD);
+		Sx1272ComputeWhitening(payload_in + cOfs1, PPM - cOfs1, 0, HEADER_RDD);
 	}
 
 	if (numCodewords > PPM) {
 		size_t cOfs2 = cOfs;
-		encodeFec(codewords, _rdd, cOfs, dOfs, bytes.data(), numCodewords-PPM);
+		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_in, numCodewords-PPM);
 		if (_whitening) {
-			Sx1272ComputeWhitening(codewords.data() + cOfs2, numCodewords - PPM, PPM - cOfs1, _rdd);
+			Sx1272ComputeWhitening(codewords + cOfs2, numCodewords - PPM, PPM - cOfs1, _rdd);
 		}
 	}
 
 	//interleave the codewords into symbols
-	std::vector<uint16_t> symbols(numSymbols);
-	diagonalInterleaveSx(codewords.data(), PPM, symbols.data(), PPM, HEADER_RDD);
+	int symbols_size = numSymbols;
+	diagonalInterleaveSx(codewords, PPM, symbols, PPM, HEADER_RDD);
 	if (numCodewords > PPM) {
-		diagonalInterleaveSx(codewords.data() + PPM, numCodewords-PPM, symbols.data()+N_HEADER_SYMBOLS, PPM, _rdd);
+		diagonalInterleaveSx(codewords + PPM, numCodewords-PPM, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
 	}
 
 	//gray decode, when SF > PPM, pad out LSBs
-	for (int &sym : symbols){
+	uint16_t sym;
+	int i;
+	for( i = 0; i < symbols_size; i++ )
+	{
+		sym = symbols[i];
 		sym = grayToBinary16(sym);
 		sym <<= (_sf - PPM);
+		symbols[i] = sym;
 	}
 
-	//post the output symbols
-	Pothos::Packet out;
-	out.payload = Pothos::BufferChunk(typeid(uint16_t), symbols.size());
-	std::memcpy(out.payload.as<void *>(), symbols.data(), out.payload.length);
-	outPort->postMessage(out);
+	*symbol_out_count = symbols_size;
+	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
