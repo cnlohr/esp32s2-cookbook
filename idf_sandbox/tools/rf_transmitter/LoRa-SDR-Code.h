@@ -438,7 +438,6 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 		else
 			codewords[(*cOfs)++] = encodeHamming74sx(bytes[(*dOfs) >> 1] & 0xf);
 	} else if (RDD == 4) for (size_t i = 0; i < count; i++, (*dOfs)++) {
-		uprintf( "D%d %d\n", *dOfs, *cOfs );
 		if ((*dOfs) & 1)
 			codewords[(*cOfs)++] = encodeHamming84sx(bytes[(*dOfs) >> 1] >> 4);
 		else
@@ -507,7 +506,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 
 		static int crcexp;
-		hdr[2] =  0x7b;//headerChecksum(hdr);
+		hdr[2] =  crcexp++;//headerChecksum(hdr);
 
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);

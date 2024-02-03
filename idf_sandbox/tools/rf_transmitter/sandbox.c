@@ -176,9 +176,10 @@ void apll_quick_update( uint32_t sdm )
 	uint8_t sdm2 = sdm>>16;
 	uint8_t sdm1 = (sdm>>8)&0xff;
 	uint8_t sdm0 = (sdm>>0)&0xff;
-	static uint8_t last_sdm_0;
-	static uint8_t last_sdm_1;
-	static uint8_t last_sdm_2;
+	static int last_sdm_0 = -1;
+	static int last_sdm_1 = -1;
+	static int last_sdm_2 = -1;
+
 	if( sdm2 != last_sdm_2 )
 		regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM2, sdm2);
 	if( sdm0 != last_sdm_0 ) 
@@ -186,9 +187,9 @@ void apll_quick_update( uint32_t sdm )
 	if( sdm1 != last_sdm_1 )
 		regi2c_write_reg_raw_local(I2C_APLL, I2C_APLL_HOSTID, I2C_APLL_DSDM1, sdm1);
 
-//	last_sdm_2 = sdm2;
-//	last_sdm_1 = sdm1;
-//	last_sdm_0 = sdm0;
+	last_sdm_2 = sdm2;
+	last_sdm_1 = sdm1;
+	last_sdm_0 = sdm0;
 }
 
 
@@ -244,7 +245,7 @@ void sandbox_tick()
 
 
 		// 13rd harmonic.  
-		float fTarg = (903.9-0.05)/13.0;
+		float fTarg = (903.9-0.02)/13.0;
 
 		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
 
@@ -260,12 +261,15 @@ void sandbox_tick()
 
 		// Send every second
 		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()/200) % 120000000;
+		frame = (getCycleCount()/200) % 24000000;
 		fplv = SigGen( frame, codeTarg );
 		uint32_t codeTargUse = codeTarg + fplv;
-		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
+		uint32_t sdm = (codeTargUse * 2 / 40 - 4 * 65536);  //XXX WARNING CHARLES, why does this move in pairs?
 		apll_quick_update( sdm );
 		if( fplv < 0 ) break;
+
+		if( fplv > 0 )
+			uprintf( "%d %d\n", (int)sdm, (int)fplv );
 	}
 //EnableISR();
 #else
@@ -275,6 +279,7 @@ void sandbox_tick()
 	{
 SigSetupTest();
 DisableISR();
+		int iterct = 0;
 while(1)
 {
 		int fplv = 0;
@@ -283,12 +288,13 @@ while(1)
 		frame = (getCycleCount()) % 40000000;
 		fplv = SigGen( frame, codeTarg );
 		uint32_t codeTargUse = codeTarg + fplv;
-		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
+		uint32_t sdm = (codeTargUse * 2 / 40 - 4 * 65536);
 		apll_quick_update( sdm );
 		if( fplv < 0 ) break;
+		iterct++;
 	}
 EnableISR();
-
+	uprintf( "Iter: %d\n", iterct );
 }
 #endif
 
