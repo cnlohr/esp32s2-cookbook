@@ -450,10 +450,10 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[20] = { 0x01, 0x02, 0x00, }; 
-	int payload_in_size = 3;
+	uint8_t payload_in[20] = { 'H', 'E', 'L', 'L', 'O', 'W', 'R', }; 
+	int payload_in_size = 4;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
-	int _whitening = 1; // Enable whitening
+	int _whitening = 0; // Enable whitening
 	int _crc = 1; // Enable CRC.
 
 	const int _ppm = 0;
@@ -462,12 +462,18 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	uint8_t codewords[1024];
 	int _explicit = 1;
 
+
 	//extract the input bytes
 //	int msg = inPort->popMessage();
 //	int pkt = msg.extract<Pothos::Packet>();
 //	size_t payloadLength = pkt.payload.length + (_crc ? 2 : 0);
 //	std::vector<uint8_t> bytes(payloadLength);
 //	std::memcpy(bytes.data(), pkt.payload.as<const void *>(), pkt.payload.length);
+
+	if( _crc )
+	{
+		payload_in_size += 2;
+	}
 
 	const size_t numCodewords = roundUp( payload_in_size * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
 	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8 bits
@@ -483,18 +489,21 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	//std::vector<uint8_t> codewords(numCodewords);
 
-	// Why does this disagree? https://www.carloalbertoboano.com/documents/yang22emu.pdf  
+	// Why does this disagree? https://Www.Carloalbertoboano.Com/Documents/Yang22emu.Pdf  
 	if (_crc) {
 		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
-		payload_in[payload_in_size] = crc & 0xff;
-		payload_in[payload_in_size+1] = (crc >> 8) & 0xff;
+		payload_in[payload_in_size-2] = crc & 0xff;
+		payload_in[payload_in_size-1] = (crc >> 8) & 0xff;
 	}
 
 		uint8_t hdr[3];
 	if (_explicit) {
 		hdr[0] = payload_in_size;
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
-		hdr[2] = headerChecksum(hdr);
+
+		static int crcexp;
+		hdr[2] = crcexp++;
+			//headerChecksum(hdr);
 
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
@@ -525,7 +534,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		diagonalInterleaveSx(codewords + PPM, numCodewords-PPM, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
 	}
 
-	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x // %d %d %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], PPM , HEADER_RDD, numCodewords);
+	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x // %d %d %d // %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], PPM , HEADER_RDD, numCodewords, payload_in_size);
 
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;

@@ -24,7 +24,7 @@ static void SigSetupTest()
 //	int j;
 	for( j = 0; j < symbols_len; j++ )
 	{
-		//symbols[j] = 255 - symbols[j] ;
+		//symbols[j] = ((0x4<<3) + symbols[j]) & 0xff;
 		//symbols[j] =  255 - (uint8_t)(symbols[j] + 0);
 		uprintf( "%d: %02x\n", j, symbols[j] );
 	}
@@ -83,8 +83,8 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	// Two symbols
 	if( sectionQuarterNumber < 0 )
 	{
-		uint32_t SYNCWORD = 0; //0x34 for some vendors?
 		int32_t  chirp = (8+sectionQuarterNumber)/4;
+		uint32_t SYNCWORD = (((0x34)>>(4-chirp*4)) & 0xf)<<3; //0x34 for some vendors?
 		int32_t  offset = SYNCWORD * CHIPSSPREAD / (MARK_FROM_SF7*128);
 		return (( placeInSweep + offset) % CHIPSSPREAD) / DESPREAD;			
 	}
@@ -114,10 +114,42 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	}
 	else
 	{
-		//return -codeTarg;
-		return -1;
+		return -codeTarg;
+		//return -1;
 	}
 }
+
+/*
+  A real semtech SX1276 will produce 16 symbols at SF8 if
+  Given 2 byte payload, CRC explicit header.
+  Given 3 bytes of payload, that goes up to 24 symbols.
+
+	[HEADER] [HEADER*0.5] [HEADER] **An extra byte** [PAYLOAD] [PAYLOAD] [PAYLOAD] [CRC] [CRC] << Does not fit.
+
+	Payload sizes:
+		-5 would be 8       (Considering CRC would be -3 bytes)
+		-4 would be 8
+		-3 would be 8
+		-2 would be 8
+		-1 would be 16
+		0 would be 16
+		1 byte: 16 symbols. (Include CRC so 3 bytes)
+		2 byte: 16 symbols. (Include CRC so 4 bytes)
+			// theoreteically, 2 bytes  + 2 crc should fit nicely into 16 symbols (or 8 bytes) BUT 3+2 (5) does not.
+
+		3 byte: 24 symbols. (Include CRC so 5 bytes)
+		4 byte: 24 symbols
+		5 byte: 24 symbols.
+		6 byte: 24 symbols.
+		7 byte: 32 symbols.
+		8 byte: 32 symbols.
+		9 byte: 32 symbols.
+		10 byte: 32 symbols.
+		11 byte: 40 symbols.
+
+	That means there's 
+
+*/
 
 #endif
 

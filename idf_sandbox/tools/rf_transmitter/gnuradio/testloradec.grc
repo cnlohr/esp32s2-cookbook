@@ -33,6 +33,18 @@ options:
     state: enabled
 
 blocks:
+- name: FFTSIZE
+  id: variable
+  parameters:
+    comment: ''
+    value: '512'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [416, 44.0]
+    rotation: 0
+    state: true
 - name: blocks_complex_to_mag_squared_0
   id: blocks_complex_to_mag_squared
   parameters:
@@ -41,14 +53,29 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    vlen: '512'
+    vlen: FFTSIZE
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1296, 200.0]
+    coordinate: [1072, 156.0]
     rotation: 0
-    state: disabled
+    state: enabled
+- name: blocks_correctiq_0
+  id: blocks_correctiq
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [280, 712.0]
+    rotation: 0
+    state: true
 - name: blocks_file_sink_0
   id: blocks_file_sink
   parameters:
@@ -64,7 +91,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [824, 480.0]
+    coordinate: [808, 524.0]
     rotation: 0
     state: true
 - name: blocks_file_sink_1
@@ -77,14 +104,14 @@ blocks:
     file: /tmp/samplelog.dat
     type: float
     unbuffered: 'False'
-    vlen: '512'
+    vlen: FFTSIZE
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1808, 176.0]
+    coordinate: [1512, 132.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: blocks_message_debug_0
   id: blocks_message_debug
   parameters:
@@ -92,12 +119,11 @@ blocks:
     alias: ''
     comment: ''
     en_uvec: 'True'
-    log_level: trace
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1632, 632.0]
+    coordinate: [1512, 608.0]
     rotation: 0
     state: true
 - name: blocks_nlog10_ff_0
@@ -110,14 +136,14 @@ blocks:
     maxoutbuf: '0'
     minoutbuf: '0'
     n: '1'
-    vlen: '512'
+    vlen: FFTSIZE
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1512, 184.0]
+    coordinate: [1288, 140.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: blocks_stream_to_vector_0
   id: blocks_stream_to_vector
   parameters:
@@ -126,37 +152,37 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    num_items: '512'
+    num_items: FFTSIZE
     type: complex
     vlen: '1'
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [832, 216.0]
+    coordinate: [592, 160.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: fft_vxx_0
   id: fft_vxx
   parameters:
     affinity: ''
     alias: ''
     comment: ''
-    fft_size: '512'
+    fft_size: FFTSIZE
     forward: 'True'
     maxoutbuf: '0'
     minoutbuf: '0'
     nthreads: '1'
     shift: 'True'
     type: complex
-    window: window.blackmanharris(512)
+    window: window.blackmanharris(FFTSIZE)
   states:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1016, 160.0]
+    coordinate: [808, 124.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: lora_sdr_crc_verif_0
   id: lora_sdr_crc_verif
   parameters:
@@ -171,7 +197,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1504, 432.0]
+    coordinate: [1152, 592.0]
     rotation: 0
     state: true
 - name: lora_sdr_deinterleaver_0
@@ -187,7 +213,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1040, 464.0]
+    coordinate: [1256, 372.0]
     rotation: 0
     state: true
 - name: lora_sdr_dewhitening_0
@@ -202,7 +228,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1352, 560.0]
+    coordinate: [1296, 480.0]
     rotation: 0
     state: true
 - name: lora_sdr_fft_demod_0
@@ -219,7 +245,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [808, 368.0]
+    coordinate: [816, 372.0]
     rotation: 0
     state: true
 - name: lora_sdr_frame_sync_0
@@ -233,7 +259,7 @@ blocks:
     impl_head: 'False'
     maxoutbuf: '0'
     minoutbuf: '0'
-    os_factor: '8'
+    os_factor: '24'
     preamb_len: '6'
     sf: '8'
     show_log_port: 'True'
@@ -242,7 +268,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [600, 352.0]
+    coordinate: [624, 404.0]
     rotation: 0
     state: true
 - name: lora_sdr_gray_mapping_0
@@ -258,7 +284,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1040, 368.0]
+    coordinate: [1040, 372.0]
     rotation: 0
     state: true
 - name: lora_sdr_hamming_dec_0
@@ -274,7 +300,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1032, 568.0]
+    coordinate: [1472, 372.0]
     rotation: 0
     state: true
 - name: lora_sdr_header_decoder_0
@@ -295,7 +321,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [976, 672.0]
+    coordinate: [1016, 476.0]
     rotation: 0
     state: true
 - name: osmosdr_source_0
@@ -713,7 +739,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [544, 816.0]
+    coordinate: [592, 644.0]
     rotation: 0
     state: enabled
 - name: rational_resampler_xxx_0
@@ -774,7 +800,7 @@ blocks:
     ant8: ''
     ant9: ''
     args: '""'
-    bb_gain0: '10'
+    bb_gain0: '4'
     bb_gain1: '20'
     bb_gain10: '20'
     bb_gain11: '20'
@@ -943,7 +969,7 @@ blocks:
     freq7: 100e6
     freq8: 100e6
     freq9: 100e6
-    gain0: '10'
+    gain0: '4'
     gain1: '10'
     gain10: '10'
     gain11: '10'
@@ -1007,7 +1033,7 @@ blocks:
     gain_mode7: 'False'
     gain_mode8: 'False'
     gain_mode9: 'False'
-    if_gain0: '10'
+    if_gain0: '4'
     if_gain1: '20'
     if_gain10: '20'
     if_gain11: '20'
@@ -1075,7 +1101,7 @@ blocks:
     minoutbuf: '0'
     nchan: '1'
     num_mboards: '1'
-    sample_rate: 1e6
+    sample_rate: 3e6
     sync: sync
     time_source0: ''
     time_source1: ''
@@ -1090,16 +1116,42 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [144, 524.0]
+    coordinate: [128, 468.0]
+    rotation: 0
+    state: disabled
+- name: soapy_hackrf_source_0
+  id: soapy_hackrf_source
+  parameters:
+    affinity: ''
+    alias: ''
+    amp: 'False'
+    bandwidth: '0'
+    center_freq: 903.9e6
+    comment: ''
+    dev_args: ''
+    gain: '16'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    samp_rate: 3e6
+    type: fc32
+    vga: '16'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [80, 780.0]
     rotation: 0
     state: true
 
 connections:
 - [blocks_complex_to_mag_squared_0, '0', blocks_nlog10_ff_0, '0']
+- [blocks_correctiq_0, '0', blocks_stream_to_vector_0, '0']
+- [blocks_correctiq_0, '0', lora_sdr_frame_sync_0, '0']
+- [blocks_correctiq_0, '0', qtgui_waterfall_sink_x_0, '0']
 - [blocks_nlog10_ff_0, '0', blocks_file_sink_1, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
 - [fft_vxx_0, '0', blocks_complex_to_mag_squared_0, '0']
-- [lora_sdr_crc_verif_0, msg, blocks_message_debug_0, log]
+- [lora_sdr_crc_verif_0, msg, blocks_message_debug_0, print]
 - [lora_sdr_deinterleaver_0, '0', lora_sdr_hamming_dec_0, '0']
 - [lora_sdr_dewhitening_0, '0', lora_sdr_crc_verif_0, '0']
 - [lora_sdr_fft_demod_0, '0', lora_sdr_gray_mapping_0, '0']
@@ -1108,15 +1160,11 @@ connections:
 - [lora_sdr_gray_mapping_0, '0', lora_sdr_deinterleaver_0, '0']
 - [lora_sdr_hamming_dec_0, '0', lora_sdr_header_decoder_0, '0']
 - [lora_sdr_header_decoder_0, '0', lora_sdr_dewhitening_0, '0']
-- [lora_sdr_header_decoder_0, frame_info, blocks_message_debug_0, log]
 - [lora_sdr_header_decoder_0, frame_info, lora_sdr_frame_sync_0, frame_info]
-- [osmosdr_source_0, '0', blocks_stream_to_vector_0, '0']
-- [osmosdr_source_0, '0', lora_sdr_frame_sync_0, '0']
-- [osmosdr_source_0, '0', rational_resampler_xxx_0, '0']
+- [rtlsdr_source_0, '0', blocks_stream_to_vector_0, '0']
 - [rtlsdr_source_0, '0', lora_sdr_frame_sync_0, '0']
 - [rtlsdr_source_0, '0', qtgui_waterfall_sink_x_0, '0']
-- [rtlsdr_source_0, '0', rational_resampler_xxx_0, '0']
+- [soapy_hackrf_source_0, '0', blocks_correctiq_0, '0']
 
 metadata:
   file_format: 1
-  grc_version: 3.10.7.0

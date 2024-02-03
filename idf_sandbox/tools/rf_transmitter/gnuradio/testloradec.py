@@ -6,28 +6,39 @@
 #
 # GNU Radio Python Flow Graph
 # Title: Not titled yet
-# GNU Radio version: 3.10.7.0
+# GNU Radio version: 3.10.1.1
 
 from packaging.version import Version as StrictVersion
+
+if __name__ == '__main__':
+    import ctypes
+    import sys
+    if sys.platform.startswith('linux'):
+        try:
+            x11 = ctypes.cdll.LoadLibrary('libX11.so')
+            x11.XInitThreads()
+        except:
+            print("Warning: failed to XInitThreads()")
+
 from PyQt5 import Qt
 from gnuradio import qtgui
-from gnuradio import blocks
-from gnuradio import blocks, gr
-from gnuradio import gr
 from gnuradio.filter import firdes
+import sip
+from gnuradio import blocks
+from gnuradio import fft
 from gnuradio.fft import window
+from gnuradio import gr
 import sys
 import signal
-from PyQt5 import Qt
 from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
+from gnuradio import soapy
 import gnuradio.lora_sdr as lora_sdr
-import osmosdr
-import time
-import sip
 
 
+
+from gnuradio import qtgui
 
 class testloradec(gr.top_block, Qt.QWidget):
 
@@ -38,8 +49,8 @@ class testloradec(gr.top_block, Qt.QWidget):
         qtgui.util.check_set_qss()
         try:
             self.setWindowIcon(Qt.QIcon.fromTheme('gnuradio-grc'))
-        except BaseException as exc:
-            print(f"Qt GUI: Could not set Icon: {str(exc)}", file=sys.stderr)
+        except:
+            pass
         self.top_scroll_layout = Qt.QVBoxLayout()
         self.setLayout(self.top_scroll_layout)
         self.top_scroll = Qt.QScrollArea()
@@ -59,28 +70,31 @@ class testloradec(gr.top_block, Qt.QWidget):
                 self.restoreGeometry(self.settings.value("geometry").toByteArray())
             else:
                 self.restoreGeometry(self.settings.value("geometry"))
-        except BaseException as exc:
-            print(f"Qt GUI: Could not restore geometry: {str(exc)}", file=sys.stderr)
+        except:
+            pass
+
+        ##################################################
+        # Variables
+        ##################################################
+        self.FFTSIZE = FFTSIZE = 512
 
         ##################################################
         # Blocks
         ##################################################
+        self.soapy_hackrf_source_0 = None
+        dev = 'driver=hackrf'
+        stream_args = ''
+        tune_args = ['']
+        settings = ['']
 
-        self.rtlsdr_source_0 = osmosdr.source(
-            args="numchan=" + str(1) + " " + ""
-        )
-        self.rtlsdr_source_0.set_time_unknown_pps(osmosdr.time_spec_t())
-        self.rtlsdr_source_0.set_sample_rate(1e6)
-        self.rtlsdr_source_0.set_center_freq(903.9e6, 0)
-        self.rtlsdr_source_0.set_freq_corr(0, 0)
-        self.rtlsdr_source_0.set_dc_offset_mode(0, 0)
-        self.rtlsdr_source_0.set_iq_balance_mode(0, 0)
-        self.rtlsdr_source_0.set_gain_mode(False, 0)
-        self.rtlsdr_source_0.set_gain(10, 0)
-        self.rtlsdr_source_0.set_if_gain(10, 0)
-        self.rtlsdr_source_0.set_bb_gain(10, 0)
-        self.rtlsdr_source_0.set_antenna('', 0)
-        self.rtlsdr_source_0.set_bandwidth(0, 0)
+        self.soapy_hackrf_source_0 = soapy.source(dev, "fc32", 1, '',
+                                  stream_args, tune_args, settings)
+        self.soapy_hackrf_source_0.set_sample_rate(0, 3e6)
+        self.soapy_hackrf_source_0.set_bandwidth(0, 0)
+        self.soapy_hackrf_source_0.set_frequency(0, 903.9e6)
+        self.soapy_hackrf_source_0.set_gain(0, 'AMP', False)
+        self.soapy_hackrf_source_0.set_gain(0, 'LNA', min(max(16, 0.0), 40.0))
+        self.soapy_hackrf_source_0.set_gain(0, 'VGA', min(max(16, 0.0), 62.0))
         self.qtgui_waterfall_sink_x_0 = qtgui.waterfall_sink_c(
             1024, #size
             window.WIN_BLACKMAN_hARRIS, #wintype
@@ -119,22 +133,35 @@ class testloradec(gr.top_block, Qt.QWidget):
         self.lora_sdr_header_decoder_0 = lora_sdr.header_decoder(False, 3, 255, False, 2, True)
         self.lora_sdr_hamming_dec_0 = lora_sdr.hamming_dec(True)
         self.lora_sdr_gray_mapping_0 = lora_sdr.gray_mapping( True)
-        self.lora_sdr_frame_sync_0 = lora_sdr.frame_sync(903900000, 125000, 8, False, [0,0], 8,6)
+        self.lora_sdr_frame_sync_0 = lora_sdr.frame_sync(903900000, 125000, 8, False, [0,0], 24,6)
         self.lora_sdr_fft_demod_0 = lora_sdr.fft_demod( True, True)
         self.lora_sdr_dewhitening_0 = lora_sdr.dewhitening()
         self.lora_sdr_deinterleaver_0 = lora_sdr.deinterleaver( True)
         self.lora_sdr_crc_verif_0 = lora_sdr.crc_verif( 1, False)
-        self.blocks_message_debug_0 = blocks.message_debug(True, gr.log_levels.trace)
+        self.fft_vxx_0 = fft.fft_vcc(FFTSIZE, True, window.blackmanharris(FFTSIZE), True, 1)
+        self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, FFTSIZE)
+        self.blocks_nlog10_ff_0 = blocks.nlog10_ff(1, FFTSIZE, 0)
+        self.blocks_message_debug_0 = blocks.message_debug(True)
+        self.blocks_file_sink_1 = blocks.file_sink(gr.sizeof_float*FFTSIZE, '/tmp/samplelog.dat', False)
+        self.blocks_file_sink_1.set_unbuffered(False)
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_float*1, '/tmp/test.txt', False)
         self.blocks_file_sink_0.set_unbuffered(False)
+        self.blocks_correctiq_0 = blocks.correctiq()
+        self.blocks_complex_to_mag_squared_0 = blocks.complex_to_mag_squared(FFTSIZE)
 
 
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.lora_sdr_crc_verif_0, 'msg'), (self.blocks_message_debug_0, 'log'))
-        self.msg_connect((self.lora_sdr_header_decoder_0, 'frame_info'), (self.blocks_message_debug_0, 'log'))
+        self.msg_connect((self.lora_sdr_crc_verif_0, 'msg'), (self.blocks_message_debug_0, 'print'))
         self.msg_connect((self.lora_sdr_header_decoder_0, 'frame_info'), (self.lora_sdr_frame_sync_0, 'frame_info'))
+        self.connect((self.blocks_complex_to_mag_squared_0, 0), (self.blocks_nlog10_ff_0, 0))
+        self.connect((self.blocks_correctiq_0, 0), (self.blocks_stream_to_vector_0, 0))
+        self.connect((self.blocks_correctiq_0, 0), (self.lora_sdr_frame_sync_0, 0))
+        self.connect((self.blocks_correctiq_0, 0), (self.qtgui_waterfall_sink_x_0, 0))
+        self.connect((self.blocks_nlog10_ff_0, 0), (self.blocks_file_sink_1, 0))
+        self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
+        self.connect((self.fft_vxx_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
         self.connect((self.lora_sdr_deinterleaver_0, 0), (self.lora_sdr_hamming_dec_0, 0))
         self.connect((self.lora_sdr_dewhitening_0, 0), (self.lora_sdr_crc_verif_0, 0))
         self.connect((self.lora_sdr_fft_demod_0, 0), (self.lora_sdr_gray_mapping_0, 0))
@@ -143,8 +170,7 @@ class testloradec(gr.top_block, Qt.QWidget):
         self.connect((self.lora_sdr_gray_mapping_0, 0), (self.lora_sdr_deinterleaver_0, 0))
         self.connect((self.lora_sdr_hamming_dec_0, 0), (self.lora_sdr_header_decoder_0, 0))
         self.connect((self.lora_sdr_header_decoder_0, 0), (self.lora_sdr_dewhitening_0, 0))
-        self.connect((self.rtlsdr_source_0, 0), (self.lora_sdr_frame_sync_0, 0))
-        self.connect((self.rtlsdr_source_0, 0), (self.qtgui_waterfall_sink_x_0, 0))
+        self.connect((self.soapy_hackrf_source_0, 0), (self.blocks_correctiq_0, 0))
 
 
     def closeEvent(self, event):
@@ -154,6 +180,12 @@ class testloradec(gr.top_block, Qt.QWidget):
         self.wait()
 
         event.accept()
+
+    def get_FFTSIZE(self):
+        return self.FFTSIZE
+
+    def set_FFTSIZE(self, FFTSIZE):
+        self.FFTSIZE = FFTSIZE
 
 
 

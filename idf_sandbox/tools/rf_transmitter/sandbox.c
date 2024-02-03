@@ -270,7 +270,7 @@ void sandbox_tick()
 //EnableISR();
 #else
 
-		frame = (getCycleCount()) % 240000000;
+		frame = (getCycleCount()) % 40000000;
 	if( frame < 1000000 )
 	{
 SigSetupTest();
@@ -280,7 +280,7 @@ while(1)
 		int fplv = 0;
 		// Send every second
 		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()) % 240000000;
+		frame = (getCycleCount()) % 40000000;
 		fplv = SigGen( frame, codeTarg );
 		uint32_t codeTargUse = codeTarg + fplv;
 		uint32_t sdm = (codeTargUse / 40 * 2 - 4 * 65536);
