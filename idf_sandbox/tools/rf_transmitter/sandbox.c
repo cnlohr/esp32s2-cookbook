@@ -228,7 +228,7 @@ void sandbox_main()
 		WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
 	}
 
-	SigSetupTest();
+	SigSetupTest(  );
 }
 
 
@@ -243,13 +243,31 @@ void sandbox_tick()
 	//uprintf( "%08x\n", REGI2C_READ(I2C_APLL, I2C_APLL_DSDM2 ));
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
+	// 13rd harmonic.  
+	const float fRadiator = 903.9;
+	const float fBandwidth = .125;
+	const float fHarmonic = 13.0;
 
-		// 13rd harmonic.  
-		float fTarg = (903.9-0.05)/13.0;
+	const float fXTAL = 40;
 
-		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
+	const float fTarg = (fRadiator-(fBandwidth/2))/fHarmonic;
+	const float fAPLL = fTarg * 2;
+	const uint32_t sdmBaseTarget = ( fAPLL * 4 / fXTAL - 4 ) * 65536 + 0.5; // ~649134
+	
+	
+	// We are actually / /4 in reality. Because of the hardware divisors in the chip.
+	// 65536 = SDM0's impact.
 
-		uint32_t codeTarg = fTarg * 65536 * 4;
+	// Xtal is at 40 MHz.
+
+	// Target range: 649159 - 649281  (122 sweep)
+
+	const float fRange = (fBandwidth)/fHarmonic;
+	const float fAPLLRange = fRange * 2;
+	const float sdmRange = ( fAPLLRange * 4 / fXTAL ) * 65536; // ~126
+
+	// 491520 clocks per chip @ SF8 (2.048ms per chirp)
+	const uint32_t sdmDivisor = ( CHIPSSPREAD / sdmRange ) + 0.5;
 
 #if 0
 	// For DEBUGGING ONLY
@@ -274,28 +292,27 @@ void sandbox_tick()
 //EnableISR();
 #else
 
-		frame = (getCycleCount()) % 40000000;
+	frame = (getCycleCount()) % 40000000;
 	if( frame < 1000000 )
 	{
-SigSetupTest();
-DisableISR();
+		SigSetupTest();
+		DisableISR();
 		int iterct = 0;
-while(1)
-{
-		int fplv = 0;
-		// Send every second
-		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()) % 40000000;
-		fplv = SigGen( frame, codeTarg );
-		uint32_t codeTargUse = codeTarg + fplv;
-		uint32_t sdm = (codeTargUse * 2 / 40 - 4 * 65536);
-		apll_quick_update( sdm );
-		if( fplv < 0 ) break;
-		iterct++;
+		while(1)
+		{
+			int fplv = 0;
+			// Send every second
+			// If you want to dialate time, do it here. 
+			frame = (getCycleCount()) % 40000000;
+			fplv = SigGen( frame, sdmBaseTarget );
+			uint32_t sdm = sdmBaseTarget + fplv / sdmDivisor;
+			apll_quick_update( sdm );
+			if( fplv < 0 ) break;
+			iterct++;
+		}
+		EnableISR();
+		uprintf( "Iter: %d\n", iterct );
 	}
-EnableISR();
-	uprintf( "Iter: %d\n", iterct );
-}
 #endif
 
 //	vTaskDelay( 1 );

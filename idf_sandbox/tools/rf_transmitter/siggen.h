@@ -26,7 +26,7 @@
 
 // Determined experimentally, but this is the amount you have to divide the chip by to
 // Fully use the 125000 Hz channel Bandwidth.
-#define DESPREAD (50*MARK_FROM_SF6)
+//#define DESPREAD (50*MARK_FROM_SF6)
 
 #define CHIPRATE .000512 // SF7 (1.024 ms) / 976Chips/s
 #define CHIPSSPREAD ((uint32_t)(240000000*MARK_FROM_SF6*CHIPRATE))
@@ -116,9 +116,9 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	uint32_t placeInQuad = Frame240MHz % (CHIPSSPREAD/4);
 
 	if( quadValue >= 0 )
-		return ( ( quadValue + placeInQuad ) % CHIPSSPREAD) / DESPREAD; // Up-Chirp
+		return ( ( quadValue + placeInQuad ) % CHIPSSPREAD); // Up-Chirp
 	else
-		return ( ( quadValue - placeInQuad + CHIPSSPREAD ) % CHIPSSPREAD ) / DESPREAD; // Down-Chirp
+		return ( ( quadValue - placeInQuad + CHIPSSPREAD ) % CHIPSSPREAD ); // Down-Chirp
 
 #if 0
 	// Let's say 1ms per sweep.
