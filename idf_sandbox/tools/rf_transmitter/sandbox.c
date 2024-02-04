@@ -244,7 +244,7 @@ void sandbox_tick()
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
 	// 13rd harmonic.  
-	const float fRadiator = 903.9 + 0.03; // 0.02 is specific to this device.
+	const float fRadiator = 903.9 + 0.00; // 0.02 is specific to this device.
 	const float fBandwidth = .125;
 	const float fHarmonic = 13.0;
 	const float fOffset = -(fBandwidth/2);
@@ -303,7 +303,6 @@ void sandbox_tick()
 
 			//XXX TODO: Experiment more with dither.  It doesn't appear to have an immediate effect?
 			//dither = ( dither + sdmDivisor/4) % sdmDivisor;
-			dither = 0;
 			uint32_t sdm = sdmBaseTarget + ( fplv + dither ) / sdmDivisor;
 
 			apll_quick_update( sdm );

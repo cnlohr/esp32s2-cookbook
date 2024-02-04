@@ -451,7 +451,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 {
 	// Payload may have 2 extra bytes for CRC.
 	uint8_t payload_in[20] = { 0xaa/*0x48*/, 0xaa/*0x45*/, 0xaa, 0xaa, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 5;
+	int payload_in_size = 18;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
@@ -480,7 +480,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	}
 
 	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
-	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8 bits
+	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8/4
 
 	if( numSymbols >= max_symbols )
 	{
@@ -518,6 +518,10 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] & 0xf);
 	}
 
+
+	//XXX WARNING THIS CODE IS BROKEN FOR ANYTHING OTHER than SF&
+
+
 	size_t cOfs1 = cOfs;
 	encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
 
@@ -538,8 +542,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		}
 	}
 
-	uprintf( "HPP: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
-PPM,numCodewords, numSymbols );
+	//uprintf( "HPP: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
 
 	//interleave the codewords into symbols
 	int symbols_size = numSymbols;
@@ -572,9 +575,7 @@ PPM,numCodewords, numSymbols );
 		symbols[i] = sym;
 	}
 
-
-	uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
-PPM,numCodewords, numSymbols );
+	//uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
 
 
 	*symbol_out_count = symbols_size;
