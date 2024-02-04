@@ -22,7 +22,7 @@ Hopefully that covers some of the other stuff.
  **********************************************************************/
 #define HEADER_RDD          4
 #define N_HEADER_SYMBOLS    (HEADER_RDD + 4)
-#define N_HEADER_CODEWORDS  5
+#define N_HEADER_CODEWORDS  6
 
 
 /***********************************************************************
@@ -450,8 +450,8 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[20] = { 0x22/*0x48*/, 0x22/*0x45*/, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 12;
+	uint8_t payload_in[20] = { 0xaa/*0x48*/, 0xaa/*0x45*/, 0xaa, 0xaa, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 5;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
@@ -463,6 +463,10 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	int _explicit = 1;
 
 
+	static int ct;
+//	payload_in[0] = ct++;
+
+
 	//extract the input bytes
 //	int msg = inPort->popMessage();
 //	int pkt = msg.extract<Pothos::Packet>();
@@ -472,10 +476,10 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	if( _crc )
 	{
-		payload_in_size += 2;
+		//payload_in_size += 2;
 	}
 
-	const size_t numCodewords = roundUp( payload_in_size * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
+	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
 	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8 bits
 
 	if( numSymbols >= max_symbols )
@@ -493,10 +497,10 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	if (_crc) {
 		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
 
-		payload_in[payload_in_size-2] = crc & 0xff;
-		payload_in[payload_in_size-1] = (crc >> 8) & 0xff;
+		payload_in[payload_in_size] = crc & 0xff;
+		payload_in[payload_in_size+1] = (crc >> 8) & 0xff;
 
-		uprintf( "CRC:%04x\n", crc );
+		uprintf( "CRC:%04x  %d\n", crc, crc );
 	}
 
 		uint8_t hdr[3];
@@ -515,26 +519,19 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	}
 
 	size_t cOfs1 = cOfs;
-	//encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
+	encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
 
 	uprintf( "HP0: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
  numSymbols, 3 );
 
-
 	if (_whitening) {
 		Sx1272ComputeWhitening(codewords + cOfs1, PPM - cOfs1, 0, HEADER_RDD);
-	}
+		}
 
 	if (numCodewords > PPM) {
 		size_t cOfs2 = cOfs;
 
-
-	uprintf( "H++: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
- numSymbols, 3 );
 		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_in, numCodewords-PPM);
-
-	uprintf( "H--: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
- numSymbols, 3 );
 
 		if (_whitening) {
 			Sx1272ComputeWhitening(codewords + cOfs2, numCodewords - PPM, PPM - cOfs1, _rdd);
@@ -549,6 +546,7 @@ PPM,numCodewords, numSymbols );
 
 	// TRICKY: The header actually uses LDRO?
 	diagonalInterleaveSx(codewords, PPM-2, symbols, PPM-2, HEADER_RDD);
+
 	int i;
 	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
 	{
@@ -556,8 +554,9 @@ PPM,numCodewords, numSymbols );
 	}
 
 	if (numCodewords > PPM) {
-		diagonalInterleaveSx(codewords + PPM, numCodewords-PPM, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
+		diagonalInterleaveSx(codewords + N_HEADER_CODEWORDS, numCodewords-N_HEADER_CODEWORDS, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
 	}
+
 
 	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
 PPM,numCodewords, numSymbols );
