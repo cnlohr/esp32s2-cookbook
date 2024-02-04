@@ -244,23 +244,16 @@ void sandbox_tick()
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
 	// 13rd harmonic.  
-	const float fRadiator = 903.9;
+	const float fRadiator = 903.9 + 0.00; // 0.02 is specific to this device.
 	const float fBandwidth = .125;
 	const float fHarmonic = 13.0;
-
+	const float fOffset = -(fBandwidth/2);
 	const float fXTAL = 40;
 
-	const float fTarg = (fRadiator-(fBandwidth/2))/fHarmonic;
+	const float fTarg = (fRadiator+fOffset)/fHarmonic;
 	const float fAPLL = fTarg * 2;
 	const uint32_t sdmBaseTarget = ( fAPLL * 4 / fXTAL - 4 ) * 65536 + 0.5; // ~649134
-	
-	
-	// We are actually / /4 in reality. Because of the hardware divisors in the chip.
-	// 65536 = SDM0's impact.
 
-	// Xtal is at 40 MHz.
-
-	// Target range: 649159 - 649281  (122 sweep)
 
 	const float fRange = (fBandwidth)/fHarmonic;
 	const float fAPLLRange = fRange * 2;
@@ -292,20 +285,27 @@ void sandbox_tick()
 //EnableISR();
 #else
 
-	frame = (getCycleCount()) % 40000000;
+	frame = (getCycleCount()) % 50000000;
 	if( frame < 1000000 )
 	{
 		SigSetupTest();
 		DisableISR();
 		int iterct = 0;
+		int dither = 0;
 		while(1)
 		{
 			int fplv = 0;
 			// Send every second
 			// If you want to dialate time, do it here. 
-			frame = (getCycleCount()) % 40000000;
+			frame = (getCycleCount()) % 50000000;
 			fplv = SigGen( frame, sdmBaseTarget );
-			uint32_t sdm = sdmBaseTarget + fplv / sdmDivisor;
+
+
+			//XXX TODO: Experiment more with dither.  It doesn't appear to have an immediate effect?
+			//dither = ( dither + sdmDivisor/4) % sdmDivisor;
+			dither = 0;
+			uint32_t sdm = sdmBaseTarget + ( fplv + dither ) / sdmDivisor;
+
 			apll_quick_update( sdm );
 			if( fplv < 0 ) break;
 			iterct++;

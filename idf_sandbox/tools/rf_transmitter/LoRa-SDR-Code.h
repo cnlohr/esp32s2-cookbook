@@ -493,7 +493,6 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	if (_crc) {
 		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
 
-	crc = 0x3333;
 		payload_in[payload_in_size-2] = crc & 0xff;
 		payload_in[payload_in_size-1] = (crc >> 8) & 0xff;
 
@@ -506,20 +505,17 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 
 		static int crcexp;
-		hdr[2] =  crcexp++;
-//headerChecksum(hdr);
-//uprintf( "HE: %d\n", hdr[2] );
+		hdr[2] = headerChecksum(hdr);
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
 		codewords[cOfs++] = encodeHamming84sx(hdr[1] & 0xf);	// crc / fec info
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] >> 4);		// checksum
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] & 0xf);
-		//codewords[cOfs++] = encodeHamming84sx(0xf);
 	}
 
 	size_t cOfs1 = cOfs;
-	encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
+	//encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
 
 	uprintf( "HP0: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
  numSymbols, 3 );
@@ -550,27 +546,37 @@ PPM,numCodewords, numSymbols );
 
 	//interleave the codewords into symbols
 	int symbols_size = numSymbols;
-	diagonalInterleaveSx(codewords, PPM, symbols, PPM, HEADER_RDD);
+
+	// TRICKY: The header actually uses LDRO?
+	diagonalInterleaveSx(codewords, PPM-2, symbols, PPM-2, HEADER_RDD);
+	int i;
+	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
+	{
+		symbols[i] *= 4;
+	}
+
 	if (numCodewords > PPM) {
 		diagonalInterleaveSx(codewords + PPM, numCodewords-PPM, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
 	}
 
-	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
+	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
 PPM,numCodewords, numSymbols );
 
 
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;
-	int i;
 	for( i = 0; i < symbols_size; i++ )
 	{
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
 		sym <<= (_sf - PPM);
-		//symbols[i] = ((1<<PPM)-1) & ( sym + 0x34 );
 		symbols[i] = sym;
-
 	}
+
+
+	uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
+PPM,numCodewords, numSymbols );
+
 
 	*symbol_out_count = symbols_size;
 	return 0;

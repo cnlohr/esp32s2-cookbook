@@ -59,14 +59,6 @@ static void SigSetupTest()
 	//for( j = 0; j < symbols_len; j++ )
 	//	symbols[j] = 255 - symbols[j];
 
-//	int j;
-	for( j = 0; j < symbols_len; j++ )
-	{
-		//symbols[j] = ((0x4<<3) + symbols[j]) & 0xff;
-		//symbols[j] =  255 - (uint8_t)(symbols[j] + 0);
-		uprintf( "%d: %02x\n", j, symbols[j] );
-	}
-
 	quadsetcount = 0;
 	int32_t * qso = quadsets;
 	for( j = 0; j < PREAMBLE_CHIRPS; j++ )
@@ -93,6 +85,8 @@ static void SigSetupTest()
 	for( j = 0; j < symbols_len; j++ )
 	{
 		int ofs = symbols[j];
+		//ofs = ofs ^ ((MARK_FROM_SF6<<6) -1);
+		//ofs &= (MARK_FROM_SF6<<6) -1;
 		qso = AddChirp( qso, ofs );
 	}
 	
@@ -102,8 +96,6 @@ static void SigSetupTest()
 
 static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 {
-	uint32_t fplv = 0;
-
 	// TODO: Get some of these encode things going: https://github.com/myriadrf/LoRa-SDR/blob/master/LoRaCodes.hpp
 
 	// frame = 0...240000000
