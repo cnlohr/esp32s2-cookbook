@@ -5,7 +5,8 @@
 #include "LoRa-SDR-Code.h"
 
 
-#define ADDSF 1 // SF8 = 1
+// From SF6, i.e. 2 would be SF8
+#define ADDSF 2
 
 #define MAX_SYMBOLS 270
 
@@ -21,17 +22,16 @@
 // 7 * 4/5 = 5.6 data bits per symbol.
 // https://wirelesspi.com/understanding-lora-phy-long-range-physical-layer/ says 7 for SF7
 
-// If SF8 set to 2, if SF9 4, if SF6, set to 0.5
-#define MARK_FROM_SF7 (1<<ADDSF)
+#define MARK_FROM_SF6 (1<<ADDSF)
 
 // Determined experimentally, but this is the amount you have to divide the chip by to
 // Fully use the 125000 Hz channel Bandwidth.
-#define DESPREAD (100*MARK_FROM_SF7)
+#define DESPREAD (50*MARK_FROM_SF6)
 
-#define CHIPRATE .001024 // SF7 (1.024 ms) / 976Chips/s
-#define CHIPSSPREAD ((uint32_t)(240000000*MARK_FROM_SF7*CHIPRATE))
+#define CHIPRATE .000512 // SF7 (1.024 ms) / 976Chips/s
+#define CHIPSSPREAD ((uint32_t)(240000000*MARK_FROM_SF6*CHIPRATE))
 
-#define PREAMBLE_CHIRPS 8
+#define PREAMBLE_CHIRPS 10
 
 int     symbols_len = 1;
 uint16_t symbols[MAX_SYMBOLS];
@@ -41,7 +41,7 @@ int32_t quadsets[MAX_SYMBOLS*4];
 
 int32_t * AddChirp( int32_t * qso, int offset )
 {
-	offset = offset * CHIPSSPREAD / (MARK_FROM_SF7*128);
+	offset = offset * CHIPSSPREAD / (MARK_FROM_SF6*64);
 	*(qso++) = (CHIPSSPREAD * 0 / 4 + offset ) % CHIPSSPREAD;
 	*(qso++) = (CHIPSSPREAD * 1 / 4 + offset ) % CHIPSSPREAD;
 	*(qso++) = (CHIPSSPREAD * 2 / 4 + offset ) % CHIPSSPREAD;
@@ -53,7 +53,7 @@ static void SigSetupTest()
 {
 	memset( symbols, 0, sizeof( symbols ) );
 	symbols_len = 5;
-	CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, 7+ADDSF );
+	CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, 6+ADDSF );
 
 	int j;
 	//for( j = 0; j < symbols_len; j++ )

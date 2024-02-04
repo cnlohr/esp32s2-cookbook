@@ -245,7 +245,7 @@ void sandbox_tick()
 
 
 		// 13rd harmonic.  
-		float fTarg = (903.9-0.02)/13.0;
+		float fTarg = (903.9-0.05)/13.0;
 
 		// We are actually / /4 in reality. Because of the hardware divisors in the chip.
 

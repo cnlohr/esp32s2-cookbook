@@ -450,8 +450,8 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[20] = { 0x22/*0x48*/, 0x22/*0x45*/, }; 
-	int payload_in_size = 2;
+	uint8_t payload_in[20] = { 0x22/*0x48*/, 0x22/*0x45*/, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 12;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
@@ -506,8 +506,9 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 
 		static int crcexp;
-		hdr[2] =  crcexp++;//headerChecksum(hdr);
-
+		hdr[2] =  crcexp++;
+//headerChecksum(hdr);
+//uprintf( "HE: %d\n", hdr[2] );
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
