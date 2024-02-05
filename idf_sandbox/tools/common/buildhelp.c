@@ -13,7 +13,7 @@
 #define PID 0x4004
 
 const char * sym_dump_cmd = "objdump -t %s > build/system_symbols.txt";
-const char * compile_cmd = "xtensa-esp32s2-elf-gcc -mlongcalls %s -DHAVE_CONFIG_H  -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=deprecated-declarations -Wextra -Wno-unused-parameter -Wno-sign-compare -ggdb -O2 -fmacro-prefix-map=/home/cnlohr/git/esp32-c3-playground=. -fmacro-prefix-map=/home/cnlohr/esp/esp-idf=IDF -fstrict-volatile-bitfields -Wno-error=unused-but-set-variable -fno-jump-tables -fno-tree-switch-conversion sandbox.c sandbox.S -T build/sandbox.lds -o build/sandbox.o -nodefaultlibs -nostartfiles";
+const char * compile_cmd = "xtensa-esp32s2-elf-gcc -mlongcalls %s -DHAVE_CONFIG_H  -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-unused-function -Wno-error=unused-variable -Wno-error=deprecated-declarations -Wextra -Wno-unused-parameter -Wno-sign-compare -ggdb -O2 -fmacro-prefix-map=/home/cnlohr/git/esp32-c3-playground=. -fmacro-prefix-map=/home/cnlohr/esp/esp-idf=IDF -fstrict-volatile-bitfields -Wno-error=unused-but-set-variable -fno-jump-tables -fno-tree-switch-conversion sandbox.c sandbox.S -T build/sandbox.lds -o build/sandbox.o -nodefaultlibs -nostartfiles";
 const char * sym_comp_dump_cmd = "objdump -t build/sandbox.o > build/sandbox_symbols.txt";
 const char * ocpy_cmd_inst = "xtensa-esp32s2-elf-objcopy -j .inst -O binary build/sandbox.o build/sandbox_inst.bin";
 const char * ocpy_cmd_data = "xtensa-esp32s2-elf-objcopy -j .data -O binary build/sandbox.o build/sandbox_data.bin";
@@ -95,7 +95,7 @@ int main( int argc, char ** argv )
 		} while ( r < 10 );
 		allocated_addy = ((uint32_t*)(rdata+0))[0];
 		allocated_size = ((uint32_t*)(rdata+0))[1];
-		printf( "ALLOCA %p %p\n", allocated_addy, allocated_size );
+		printf( "ALLOCA %08x %08x\n", allocated_addy, allocated_size );
 
 		if( allocated_addy == 0 )
 		{
@@ -411,6 +411,18 @@ int main( int argc, char ** argv )
 			}
 			fclose( f );
 		}
+
+		FILE * fc = fopen( "build/compilecount.txt", "r" );
+		int cc = 0;
+		if( fc )
+		{
+			fscanf( fc, "%d", &cc );
+			fclose( fc );
+		}
+		cc++;
+		fc = fopen( "build/compilecount.txt", "w" );
+		fprintf( fc, "%d\n", cc );
+		fclose( fc );
 
 		int total_segment_size = data_segment_end - data_segment_origin + sandbox_bss_size + 16;
 		printf( "Data: %d bytes\n", data_segment_start - data_segment_origin );

@@ -457,6 +457,11 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	const size_t PPM = ( _sf <= 11 ) ? _sf : 11;
 
+	// SF11 work
+	// 
+	//  HAM: 450 324 70 400 33c 1bc 48 608  / 46c 32e 7a8 755 1c9 412 3e2 600 // 11 4 22 // 2 ;; 11 22 16
+	//  HAM: 458 304 60 400 23c 1bc 208 728 / 460 72f 1ab 456 1c9 1d2 162 780 // 11 4 22 // 3 ;; 11 22 16
+
 
 
 	int _explicit = 1;
@@ -472,7 +477,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
 	int header_ldro_ppm_reduction = ( _sf < 7 ) ? 0 : 2;
 	if( _sf > 10 ) header_ldro_ppm_reduction = 2;
-	if( _sf > 10 ) extra_codewords_due_to_header_padding = 1;
+	if( _sf > 10 ) extra_codewords_due_to_header_padding = 4;
 
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
 
