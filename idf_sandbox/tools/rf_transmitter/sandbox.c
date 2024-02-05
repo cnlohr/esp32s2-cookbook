@@ -136,6 +136,8 @@ static inline uint32_t getCycleCount()
 #define I2C_APLL    0X6D
 
 
+int lastend = 0;
+
 // Configures APLL = 480 / 4 = 120
 // 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
 // Datasheet recommends that numerator does not exceed 500MHz.
@@ -226,6 +228,8 @@ void sandbox_main()
 	}
 
 	SigSetupTest(  );
+
+	lastend = getCycleCount();
 }
 
 
@@ -284,7 +288,7 @@ void sandbox_tick()
 
 	uint32_t start = getCycleCount();
 	frame = (start) % 24000000;
-	if( frame < 1000000 )
+	if( (uint32_t)(start - lastend) > 24000000 )
 	{
 		SigSetupTest();
 		//DisableISR();
@@ -317,6 +321,7 @@ void sandbox_tick()
 
 		//EnableISR();
 		uprintf( "Iter: %d\n", iterct );
+		lastend = getCycleCount();
 	}
 #endif
 

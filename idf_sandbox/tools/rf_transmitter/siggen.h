@@ -5,8 +5,8 @@
 #include "LoRa-SDR-Code.h"
 
 
-// From SF5, i.e. 3 would be SF8
-#define ADDSF 12
+// From SF5, i.e. 8 would be SF8
+#define ADDSF 8
 
 #define MAX_SYMBOLS 270
 

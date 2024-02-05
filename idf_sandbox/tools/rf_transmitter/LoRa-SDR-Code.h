@@ -449,39 +449,35 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[20] = { 0xbb/*0x48*/, 0xcc/*0x45*/, 0xde, 0xaa, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 2;
+	uint8_t payload_in[20] = { 0xbb/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 6;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
 
-	const size_t PPM = ( _sf <= 11 ) ? _sf : 11;
+	size_t PPM = _sf;
 
-	// SF11 work
-	// 
-	//  HAM: 450 324 70 400 33c 1bc 48 608  / 46c 32e 7a8 755 1c9 412 3e2 600 // 11 4 22 // 2 ;; 11 22 16
-	//  HAM: 458 304 60 400 23c 1bc 208 728 / 460 72f 1ab 456 1c9 1d2 162 780 // 11 4 22 // 3 ;; 11 22 16
-
-
-	// HAM: 450 324 70 400 33c 1bc 48 608 / 46c 32e 7a8 755 1c9 412 3e2 600 // 11 4 22 // 2 ;; 11 22 16 OK
-	// HAM: 50 224 d0 400 374 1b8 50 404 / d9 65c 551 6ab 312 65 7c4 411 // 11 4 22 // 2 ;; 11 22 16 NOT OK
-
+	// SF11 is pretty close.
 
 	int _explicit = 1;
 
 	// SF6 does NOT WORK
-	int nHeaderCodewords = ( _sf == 8 ) ? 6 : 5;
+	int nHeaderCodewords = 0;
+	if( _sf == 6 ) nHeaderCodewords = 5;
+	if( _sf == 7 ) nHeaderCodewords = 5;
+	if( _sf == 8 ) nHeaderCodewords = 6;
 	if( _sf == 9 ) nHeaderCodewords = 7;
 	if( _sf == 10 ) nHeaderCodewords = 8;
-	if( _sf == 11 ) nHeaderCodewords = 10;
- 
-	int extra_codewords_due_to_header_padding = ( _sf == 7 ) ? 1 : 0;
-	if( _sf > 10 ) extra_codewords_due_to_header_padding = 4;
+	if( _sf == 11 ) nHeaderCodewords = 9;  // ???? Probably Wrong
+	if( _sf == 12 ) nHeaderCodewords = 10;  // ???? Probably Wrong
+
+	int extra_codewords_due_to_header_padding = ( _sf <= 7 ) ? 1 : 0;
 
 	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
-	int header_ldro_ppm_reduction = ( _sf < 7 ) ? 0 : 2;
-	if( _sf > 10 ) header_ldro_ppm_reduction = 2; // OR 4
-
+	int header_ppm = ( _sf < 7 ) ? ( _sf - 2 ) : ( _sf > 11 ) ? ( _sf - 2 ) : ( _sf - 2 );
+	int header_shift = ( _sf < 7 ) ? 2 : 0;
+	int data_ppm = _sf; 
+	// XXX TODO: Investigate: I thought SF12 had an LDRO mode which made the PPM only 10.
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
 
 	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? nHeaderCodewords:0) + extra_codewords_due_to_header_padding, PPM);
@@ -564,8 +560,8 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	//interleave the codewords into symbols
 	int symbols_size = numSymbols;
 
-	// TRICKY: The header actually uses LDRO?
-	diagonalInterleaveSx(codewords, PPM-header_ldro_ppm_reduction, symbols, PPM-header_ldro_ppm_reduction, HEADER_RDD);
+	// TRICKY: Header is forced to a particularly slow mode.
+	diagonalInterleaveSx(codewords, header_ppm, symbols, header_ppm, HEADER_RDD);
 
 	int i;
 	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
@@ -573,23 +569,29 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		symbols[i] *= 4;
 	}
 
-	if (numCodewords > PPM) {
-		diagonalInterleaveSx(codewords + nHeaderCodewords, numCodewords-nHeaderCodewords, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
+	if (numCodewords > header_ppm) {
+		diagonalInterleaveSx(codewords + nHeaderCodewords, numCodewords-nHeaderCodewords, symbols+N_HEADER_SYMBOLS, data_ppm, _rdd);
 	}
 
 
 	uprintf( "HAM: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size, PPM,numCodewords, numSymbols );
 
-
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;
 	for( i = 0; i < symbols_size; i++ )
 	{
+		int is_header = (i < 8);
+		int this_ppm = is_header ? header_ppm : data_ppm;
+		int this_shift = is_header ? header_shift : 0;
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
-		sym <<= (_sf - PPM);
+		sym <<= (_sf - this_ppm);
+		sym >>= this_shift;
 		symbols[i] = sym; // OR +1
 	}
+
+
+	uprintf( "HAM: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size, PPM,numCodewords, numSymbols );
 
 	//uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
 
