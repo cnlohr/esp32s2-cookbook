@@ -22,7 +22,6 @@ Hopefully that covers some of the other stuff.
  **********************************************************************/
 #define HEADER_RDD          4
 #define N_HEADER_SYMBOLS    (HEADER_RDD + 4)
-#define N_HEADER_CODEWORDS  6
 
 
 /***********************************************************************
@@ -450,41 +449,41 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[20] = { 0xaa/*0x48*/, 0xaa/*0x45*/, 0xaa, 0xaa, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 18;
+	uint8_t payload_in[20] = { 0xbb/*0x48*/, 0xcc/*0x45*/, 0xde, 0xaa, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 2;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
 
-	const int _ppm = 0;
-	const size_t PPM = (_ppm == 0) ? _sf : _ppm;
+	const size_t PPM = ( _sf <= 11 ) ? _sf : 11;
 
-	uint8_t codewords[1024] = { 0 };
+
+
 	int _explicit = 1;
 
+	// SF6 does NOT WORK
+	int nHeaderCodewords = ( _sf == 8 ) ? 6 : 5;
+	if( _sf == 9 ) nHeaderCodewords = 7;
+	if( _sf == 10 ) nHeaderCodewords = 8;
+	if( _sf == 11 ) nHeaderCodewords = 9;
+ 
+	int extra_codewords_due_to_header_padding = ( _sf == 7 ) ? 1 : 0;
 
-	static int ct;
-//	payload_in[0] = ct++;
+	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
+	int header_ldro_ppm_reduction = ( _sf < 7 ) ? 0 : 2;
+	if( _sf > 10 ) header_ldro_ppm_reduction = 2;
+	if( _sf > 10 ) extra_codewords_due_to_header_padding = 1;
 
+	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
 
-	//extract the input bytes
-//	int msg = inPort->popMessage();
-//	int pkt = msg.extract<Pothos::Packet>();
-//	size_t payloadLength = pkt.payload.length + (_crc ? 2 : 0);
-//	std::vector<uint8_t> bytes(payloadLength);
-//	std::memcpy(bytes.data(), pkt.payload.as<const void *>(), pkt.payload.length);
-
-	if( _crc )
-	{
-		//payload_in_size += 2;
-	}
-
-	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? N_HEADER_CODEWORDS:0), PPM);
+	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? nHeaderCodewords:0) + extra_codewords_due_to_header_padding, PPM);
 	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8/4
+	uint8_t codewords[numCodewords];
+	memset( codewords, 0, sizeof( codewords ) );
 
 	if( numSymbols >= max_symbols )
 	{
-		//fprintf( stderr, "Error: Too many symbols to fit\n" );
+		uprintf( "Error: Too many symbols to fit (%d/%d)\n", numSymbols, max_symbols );
 		return -1;
 	}
 	
@@ -492,45 +491,55 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	size_t dOfs = 0;
 
 	//std::vector<uint8_t> codewords(numCodewords);
-
-	// Why does this disagree? https://Www.Carloalbertoboano.Com/Documents/Yang22emu.Pdf  
-	if (_crc) {
+	if (_crc)
+	{
 		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
-
 		payload_in[payload_in_size] = crc & 0xff;
 		payload_in[payload_in_size+1] = (crc >> 8) & 0xff;
-
-		uprintf( "CRC:%04x  %d\n", crc, crc );
 	}
 
-		uint8_t hdr[3];
+	// Why does this disagree? https://www.Carloalbertoboano.Com/Documents/Yang22emu.Pdf  
 	if (_explicit) {
+		uint8_t hdr[3];
 		hdr[0] = payload_in_size;
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
-
-		static int crcexp;
-		hdr[2] = headerChecksum(hdr);
+		static int k;
+		hdr[2] = 
+			//k++;
+			headerChecksum(hdr);
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
 		codewords[cOfs++] = encodeHamming84sx(hdr[1] & 0xf);	// crc / fec info
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] >> 4);		// checksum
 		codewords[cOfs++] = encodeHamming84sx(hdr[2] & 0xf);
+
+		if( extra_codewords_due_to_header_padding > 1 )
+		{
+			codewords[cOfs++] = 0;
+		}
+		if( extra_codewords_due_to_header_padding > 2 )
+		{
+			codewords[cOfs++] = 0;
+		}
+		if( extra_codewords_due_to_header_padding > 3 )
+		{
+			codewords[cOfs++] = 0;
+		}
 	}
 
-
-	//XXX WARNING THIS CODE IS BROKEN FOR ANYTHING OTHER than SF&
-
-
 	size_t cOfs1 = cOfs;
-	encodeFec(codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs);
+	encodeFec( codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs );
 
-	uprintf( "HP0: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
+	uprintf( "cofs/dofs: %d %d\n", cOfs, dOfs );
+	uprintf( "HP0: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
  numSymbols, 3 );
 
-	if (_whitening) {
+	// Whitening for the data that lives inside the header block.
+	if( _whitening )
+	{
 		Sx1272ComputeWhitening(codewords + cOfs1, PPM - cOfs1, 0, HEADER_RDD);
-		}
+	}
 
 	if (numCodewords > PPM) {
 		size_t cOfs2 = cOfs;
@@ -542,13 +551,13 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		}
 	}
 
-	//uprintf( "HPP: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
+	 uprintf( "HPP: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
 
 	//interleave the codewords into symbols
 	int symbols_size = numSymbols;
 
 	// TRICKY: The header actually uses LDRO?
-	diagonalInterleaveSx(codewords, PPM-2, symbols, PPM-2, HEADER_RDD);
+	diagonalInterleaveSx(codewords, PPM-header_ldro_ppm_reduction, symbols, PPM-header_ldro_ppm_reduction, HEADER_RDD);
 
 	int i;
 	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
@@ -557,12 +566,11 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	}
 
 	if (numCodewords > PPM) {
-		diagonalInterleaveSx(codewords + N_HEADER_CODEWORDS, numCodewords-N_HEADER_CODEWORDS, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
+		diagonalInterleaveSx(codewords + nHeaderCodewords, numCodewords-nHeaderCodewords, symbols+N_HEADER_SYMBOLS, PPM, _rdd);
 	}
 
 
-	uprintf( "HAM: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
-PPM,numCodewords, numSymbols );
+	uprintf( "HAM: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size, PPM,numCodewords, numSymbols );
 
 
 	//gray decode, when SF > PPM, pad out LSBs

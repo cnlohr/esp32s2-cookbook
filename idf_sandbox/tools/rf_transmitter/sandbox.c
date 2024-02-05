@@ -27,21 +27,16 @@ static inline uint32_t getCycleCount()
 
 
 
-#define SWIO_PIN        6
-#define SWCLK_PIN       4
-#define SWIO_PU_PIN     9
-#define SWCLK_PU_PIN    8
-#define VDD5V_EN        12
-#define VDD3V3_EN       11
-#define MULTI2_PIN      2
-#define WSO_PIN         14
-
 
 #define IO_MUX_REG(x) XIO_MUX_REG(x)
 #define XIO_MUX_REG(x) IO_MUX_GPIO##x##_REG
 
 #define GPIO_NUM(x) XGPIO_NUM(x)
 #define XGPIO_NUM(x) GPIO_NUM_##x
+
+
+#define RF1_PIN 17
+#define RF2_PIN 18
 
 
 
@@ -201,10 +196,12 @@ void sandbox_main()
 	// Output clock on P2.
 
 	// Maximize the drive strength.
-	gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_3 );
+	gpio_set_drive_capability( GPIO_NUM(RF1_PIN), GPIO_DRIVE_CAP_3 );
+	gpio_set_drive_capability( GPIO_NUM(RF2_PIN), GPIO_DRIVE_CAP_3 );
 
 	// Use the IO matrix to create the inverse of TX on pin 17.
-	gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+	gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+	gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 0 );
 
 	periph_module_enable(PERIPH_I2S0_MODULE);
 
@@ -244,8 +241,8 @@ void sandbox_tick()
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
 	// 13rd harmonic.  
-	const float fRadiator = 903.9 + 0.00; // 0.02 is specific to this device.
-	const float fBandwidth = .125;
+	const float fRadiator = 903.9 + 0.01; // 0.02 is specific to this device.
+	const float fBandwidth = .125; // Actually de-tuning this a tiny bit seems to help things too.
 	const float fHarmonic = 13.0;
 	const float fOffset = -(fBandwidth/2);
 	const float fXTAL = 40;
@@ -285,31 +282,40 @@ void sandbox_tick()
 //EnableISR();
 #else
 
-	frame = (getCycleCount()) % 50000000;
+	uint32_t start = getCycleCount();
+	frame = (start) % 24000000;
 	if( frame < 1000000 )
 	{
 		SigSetupTest();
-		DisableISR();
+		//DisableISR();
 		int iterct = 0;
 		int dither = 0;
+
+		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 0 );
+
 		while(1)
 		{
 			int fplv = 0;
 			// Send every second
 			// If you want to dialate time, do it here. 
-			frame = (getCycleCount()) % 50000000;
+			frame = (getCycleCount()) - start;
 			fplv = SigGen( frame, sdmBaseTarget );
 
 
 			//XXX TODO: Experiment more with dither.  It doesn't appear to have an immediate effect?
-			//dither = ( dither + sdmDivisor/4) % sdmDivisor;
+			//dither = ( dither + sdmDivisor/2) % sdmDivisor;
 			uint32_t sdm = sdmBaseTarget + ( fplv + dither ) / sdmDivisor;
 
-			apll_quick_update( sdm );
 			if( fplv < 0 ) break;
+			apll_quick_update( sdm );
 			iterct++;
 		}
-		EnableISR();
+
+		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 1 );
+		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 1 );
+
+		//EnableISR();
 		uprintf( "Iter: %d\n", iterct );
 	}
 #endif

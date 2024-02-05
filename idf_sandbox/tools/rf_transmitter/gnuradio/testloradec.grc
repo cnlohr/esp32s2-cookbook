@@ -75,7 +75,7 @@ blocks:
     bus_structure: null
     coordinate: [280, 712.0]
     rotation: 0
-    state: true
+    state: disabled
 - name: blocks_file_sink_0
   id: blocks_file_sink
   parameters:
@@ -259,11 +259,11 @@ blocks:
     impl_head: 'False'
     maxoutbuf: '0'
     minoutbuf: '0'
-    os_factor: '24'
+    os_factor: '8'
     preamb_len: '6'
-    sf: '8'
+    sf: '6'
     show_log_port: 'True'
-    sync_word: '[0,0]'
+    sync_word: '0x43'
   states:
     bus_sink: false
     bus_source: false
@@ -1118,7 +1118,7 @@ blocks:
     bus_structure: null
     coordinate: [128, 468.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: soapy_hackrf_source_0
   id: soapy_hackrf_source
   parameters:
@@ -1141,7 +1141,7 @@ blocks:
     bus_structure: null
     coordinate: [80, 780.0]
     rotation: 0
-    state: true
+    state: disabled
 
 connections:
 - [blocks_complex_to_mag_squared_0, '0', blocks_nlog10_ff_0, '0']

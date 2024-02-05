@@ -5,8 +5,8 @@
 #include "LoRa-SDR-Code.h"
 
 
-// From SF6, i.e. 2 would be SF8
-#define ADDSF 3
+// From SF5, i.e. 3 would be SF8
+#define ADDSF 11
 
 #define MAX_SYMBOLS 270
 
@@ -22,26 +22,26 @@
 // 7 * 4/5 = 5.6 data bits per symbol.
 // https://wirelesspi.com/understanding-lora-phy-long-range-physical-layer/ says 7 for SF7
 
-#define MARK_FROM_SF6 (1<<ADDSF)
+#define MARK_FROM_SF0 (1<<ADDSF)
 
 // Determined experimentally, but this is the amount you have to divide the chip by to
 // Fully use the 125000 Hz channel Bandwidth.
 //#define DESPREAD (50*MARK_FROM_SF6)
 
-#define CHIPRATE .000512 // SF7 (1.024 ms) / 976Chips/s
-#define CHIPSSPREAD ((uint32_t)(240000000*MARK_FROM_SF6*CHIPRATE))
+#define CHIPRATE 8 // chirp length for SF0, in us
+#define CHIPSSPREAD ((uint32_t)(240ULL*MARK_FROM_SF0*CHIPRATE))
 
 #define PREAMBLE_CHIRPS 10
-
+#define CODEWORD_LENGTH 2
 int     symbols_len = 1;
 uint16_t symbols[MAX_SYMBOLS];
 
 uint32_t quadsetcount;
-int32_t quadsets[MAX_SYMBOLS*4];
+int32_t quadsets[MAX_SYMBOLS*4+PREAMBLE_CHIRPS*4+9+CODEWORD_LENGTH*4];
 
 int32_t * AddChirp( int32_t * qso, int offset )
 {
-	offset = offset * CHIPSSPREAD / (MARK_FROM_SF6*64);
+	offset = offset * CHIPSSPREAD / (MARK_FROM_SF0);
 	*(qso++) = (CHIPSSPREAD * 0 / 4 + offset ) % CHIPSSPREAD;
 	*(qso++) = (CHIPSSPREAD * 1 / 4 + offset ) % CHIPSSPREAD;
 	*(qso++) = (CHIPSSPREAD * 2 / 4 + offset ) % CHIPSSPREAD;
@@ -52,8 +52,14 @@ int32_t * AddChirp( int32_t * qso, int offset )
 static void SigSetupTest()
 {
 	memset( symbols, 0, sizeof( symbols ) );
-	symbols_len = 5;
-	CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, 6+ADDSF );
+	int r = CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, ADDSF );
+
+	if( r < 0 )
+	{
+		uprintf( "Error generating stream: %d\n", r );
+		quadsetcount = 0;
+		return;
+	}
 
 	int j;
 	//for( j = 0; j < symbols_len; j++ )
@@ -68,8 +74,18 @@ static void SigSetupTest()
 
 	uint8_t syncword = 0x43;
 
-	qso = AddChirp( qso, ( syncword & 0xf ) << 3 );
-	qso = AddChirp( qso, ( ( syncword & 0xf0 ) >> 4 ) << 3 );
+#if ADDSF <= 6
+	#define CODEWORD_SHIFT 2 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
+#elif ADDSF >= 11
+	#define CODEWORD_SHIFT 3 // XXX TODO: Unknown for SF11, SF12 Might be 3?
+#else
+	#define CODEWORD_SHIFT 3
+#endif
+
+	if( CODEWORD_LENGTH > 0 )
+		qso = AddChirp( qso,  ( ( syncword & 0xf ) << CODEWORD_SHIFT ) );
+	if( CODEWORD_LENGTH > 1 )
+		qso = AddChirp( qso, ( ( ( syncword & 0xf0 ) >> 4 ) << CODEWORD_SHIFT ) );
 
 
 	*(qso++) = -(CHIPSSPREAD * 0 / 4 )-1;
@@ -90,8 +106,8 @@ static void SigSetupTest()
 		qso = AddChirp( qso, ofs );
 	}
 	
-
 	quadsetcount = qso - quadsets;
+	uprintf( "--- %d %d %d\n", symbols_len, quadsetcount, CHIPSSPREAD/4 );
 }
 
 static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
@@ -99,7 +115,6 @@ static int32_t SigGen( uint32_t Frame240MHz, uint32_t codeTarg )
 	// TODO: Get some of these encode things going: https://github.com/myriadrf/LoRa-SDR/blob/master/LoRaCodes.hpp
 
 	// frame = 0...240000000
-
 	uint32_t sectionQuarterNumber = Frame240MHz / (CHIPSSPREAD/4);
 	if( sectionQuarterNumber >= quadsetcount )
 		return -codeTarg;
