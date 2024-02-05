@@ -27,7 +27,7 @@ int main()
 		data[i] = val;
 	}
 
-	int width = 512;
+	int width = 2048;
 	int height = len / width;
 
 	uint32_t * outimage = malloc( sizeof( uint32_t ) * width * height );

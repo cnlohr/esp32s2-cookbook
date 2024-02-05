@@ -77,7 +77,7 @@ class testloradec(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
-        self.FFTSIZE = FFTSIZE = 512
+        self.FFTSIZE = FFTSIZE = 2048
 
         ##################################################
         # Blocks

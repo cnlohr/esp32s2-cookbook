@@ -6,7 +6,7 @@
 
 
 // From SF5, i.e. 3 would be SF8
-#define ADDSF 11
+#define ADDSF 12
 
 #define MAX_SYMBOLS 270
 

@@ -463,6 +463,9 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	//  HAM: 458 304 60 400 23c 1bc 208 728 / 460 72f 1ab 456 1c9 1d2 162 780 // 11 4 22 // 3 ;; 11 22 16
 
 
+	// HAM: 450 324 70 400 33c 1bc 48 608 / 46c 32e 7a8 755 1c9 412 3e2 600 // 11 4 22 // 2 ;; 11 22 16 OK
+	// HAM: 50 224 d0 400 374 1b8 50 404 / d9 65c 551 6ab 312 65 7c4 411 // 11 4 22 // 2 ;; 11 22 16 NOT OK
+
 
 	int _explicit = 1;
 
@@ -470,14 +473,14 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	int nHeaderCodewords = ( _sf == 8 ) ? 6 : 5;
 	if( _sf == 9 ) nHeaderCodewords = 7;
 	if( _sf == 10 ) nHeaderCodewords = 8;
-	if( _sf == 11 ) nHeaderCodewords = 9;
+	if( _sf == 11 ) nHeaderCodewords = 10;
  
 	int extra_codewords_due_to_header_padding = ( _sf == 7 ) ? 1 : 0;
+	if( _sf > 10 ) extra_codewords_due_to_header_padding = 4;
 
 	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
 	int header_ldro_ppm_reduction = ( _sf < 7 ) ? 0 : 2;
-	if( _sf > 10 ) header_ldro_ppm_reduction = 2;
-	if( _sf > 10 ) extra_codewords_due_to_header_padding = 4;
+	if( _sf > 10 ) header_ldro_ppm_reduction = 2; // OR 4
 
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
 
@@ -510,8 +513,8 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 		static int k;
 		hdr[2] = 
-			//k++;
-			headerChecksum(hdr);
+			k++;
+			//headerChecksum(hdr);
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
@@ -585,7 +588,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
 		sym <<= (_sf - PPM);
-		symbols[i] = sym;
+		symbols[i] = sym; // OR +1
 	}
 
 	//uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
