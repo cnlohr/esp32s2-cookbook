@@ -448,9 +448,11 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
 {
+	static int uctr = 0;
 	// Payload may have 2 extra bytes for CRC.
 	uint8_t payload_in[20] = { 0xbb/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
 	int payload_in_size = 6;
+	payload_in[4] = uctr++;
 	int _rdd = 4; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
@@ -475,7 +477,6 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
 	int header_ppm = ( _sf < 7 ) ? ( _sf - 2 ) : ( _sf > 11 ) ? ( _sf - 2 ) : ( _sf - 2 );
-	int header_shift = ( _sf < 7 ) ? 2 : 0;
 	int data_ppm = _sf; 
 	// XXX TODO: Investigate: I thought SF12 had an LDRO mode which made the PPM only 10.
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
@@ -509,8 +510,8 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 		static int k;
 		hdr[2] = 
-			k++;
-			//headerChecksum(hdr);
+			//k++;
+			headerChecksum(hdr);
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
@@ -581,12 +582,9 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	for( i = 0; i < symbols_size; i++ )
 	{
 		int is_header = (i < 8);
-		int this_ppm = is_header ? header_ppm : data_ppm;
-		int this_shift = is_header ? header_shift : 0;
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
-		sym <<= (_sf - this_ppm);
-		sym >>= this_shift;
+		sym <<= (_sf - PPM);
 		symbols[i] = sym; // OR +1
 	}
 
