@@ -152,8 +152,18 @@ void IRAM_ATTR local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sd
 		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
 		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_1);
 		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_2_REV1);
-		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
+		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div );
 	}
+
+
+	// Settings determined experimentally.
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_TSCHGP, 0 ); // 0 or 1
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_EN_FAST_CAL, 1 ); // 0 or 1
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DHREF_SEL, 0 ); // 0..3
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DLREF_SEL, 0 ); // 0..3
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_SDM_DITHER, 1 ); // 0 or 1
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DVDD, 25 ); // 0 .. 31
+
 }
 
 
@@ -288,16 +298,18 @@ void sandbox_tick()
 
 	uint32_t start = getCycleCount();
 	frame = (start) % 24000000;
-	if( (uint32_t)(start - lastend) > 24000000 )
+	if( (uint32_t)(start - lastend) > 240000000 )
 	{
 		SigSetupTest();
-		//DisableISR();
 		int iterct = 0;
 		int dither = 0;
 
 		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 0 );
+		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0);
+		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1);
 
+		//DisableISR();
 		while(1)
 		{
 			int fplv = 0;
@@ -315,11 +327,13 @@ void sandbox_tick()
 			apll_quick_update( sdm );
 			iterct++;
 		}
+		//EnableISR();
+		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 0);
+		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 1);
 
 		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 1 );
 		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 1 );
 
-		//EnableISR();
 		uprintf( "Iter: %d\n", iterct );
 		lastend = getCycleCount();
 	}

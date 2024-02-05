@@ -8,7 +8,7 @@
 // From SF5, i.e. 8 would be SF8
 #define ADDSF 8
 
-#define MAX_SYMBOLS 270
+#define MAX_SYMBOLS 2070
 
 // https://electronics.stackexchange.com/questions/278192/understanding-the-relationship-between-lora-chips-chirps-symbols-and-bits
 // Has some good hints
@@ -31,6 +31,10 @@
 #define CHIPRATE 8 // chirp length for SF0, in us
 #define CHIPSSPREAD ((uint32_t)(240ULL*MARK_FROM_SF0*CHIPRATE))
 
+
+
+#define DATA_PHASE_OFFSET ( CHIPSSPREAD / 512 )
+
 #define PREAMBLE_CHIRPS 10
 #define CODEWORD_LENGTH 2
 int     symbols_len = 1;
@@ -39,13 +43,14 @@ uint16_t symbols[MAX_SYMBOLS];
 uint32_t quadsetcount;
 int32_t quadsets[MAX_SYMBOLS*4+PREAMBLE_CHIRPS*4+9+CODEWORD_LENGTH*4];
 
-int32_t * AddChirp( int32_t * qso, int offset )
+int32_t * AddChirp( int32_t * qso, int offset, int verneer )
 {
 	offset = offset * CHIPSSPREAD / (MARK_FROM_SF0);
-	*(qso++) = (CHIPSSPREAD * 0 / 4 + offset ) % CHIPSSPREAD;
-	*(qso++) = (CHIPSSPREAD * 1 / 4 + offset ) % CHIPSSPREAD;
-	*(qso++) = (CHIPSSPREAD * 2 / 4 + offset ) % CHIPSSPREAD;
-	*(qso++) = (CHIPSSPREAD * 3 / 4 + offset ) % CHIPSSPREAD;
+	offset += verneer;
+	*(qso++) = (CHIPSSPREAD * 0 / 4 + offset + CHIPSSPREAD ) % CHIPSSPREAD;
+	*(qso++) = (CHIPSSPREAD * 1 / 4 + offset + CHIPSSPREAD ) % CHIPSSPREAD;
+	*(qso++) = (CHIPSSPREAD * 2 / 4 + offset + CHIPSSPREAD ) % CHIPSSPREAD;
+	*(qso++) = (CHIPSSPREAD * 3 / 4 + offset + CHIPSSPREAD ) % CHIPSSPREAD;
 	return qso;
 }
 
@@ -69,7 +74,7 @@ static void SigSetupTest()
 	int32_t * qso = quadsets;
 	for( j = 0; j < PREAMBLE_CHIRPS; j++ )
 	{
-		qso = AddChirp( qso, 0 );
+		qso = AddChirp( qso, 0, 0 );
 	}
 
 	uint8_t syncword = 0x43;
@@ -83,9 +88,9 @@ static void SigSetupTest()
 #endif
 
 	if( CODEWORD_LENGTH > 0 )
-		qso = AddChirp( qso,  ( ( syncword & 0xf ) << CODEWORD_SHIFT ) );
+		qso = AddChirp( qso,  ( ( syncword & 0xf ) << CODEWORD_SHIFT ), 0 );
 	if( CODEWORD_LENGTH > 1 )
-		qso = AddChirp( qso, ( ( ( syncword & 0xf0 ) >> 4 ) << CODEWORD_SHIFT ) );
+		qso = AddChirp( qso, ( ( ( syncword & 0xf0 ) >> 4 ) << CODEWORD_SHIFT ), 0 );
 
 
 	*(qso++) = -(CHIPSSPREAD * 0 / 4 )-1;
@@ -97,13 +102,22 @@ static void SigSetupTest()
 	*(qso++) = -(CHIPSSPREAD * 2 / 4 )-1;
 	*(qso++) = -(CHIPSSPREAD * 3 / 4 )-1;
 	*(qso++) = -(CHIPSSPREAD * 0 / 4 )-1;
+
+	if( ADDSF <= 6 )
+	{
+		// Two additional upchirps with SF6 https://github.com/tapparelj/gr-lora_sdr/issues/74#issuecomment-1891569580
+		for( j = 0; j < 2; j++ )
+		{
+			qso = AddChirp( qso, 0, 0 );
+		}
+	}
 
 	for( j = 0; j < symbols_len; j++ )
 	{
 		int ofs = symbols[j];
 		//ofs = ofs ^ ((MARK_FROM_SF6<<6) -1);
 		//ofs &= (MARK_FROM_SF6<<6) -1;
-		qso = AddChirp( qso, ofs );
+		qso = AddChirp( qso, ofs, DATA_PHASE_OFFSET );
 	}
 	
 	quadsetcount = qso - quadsets;
