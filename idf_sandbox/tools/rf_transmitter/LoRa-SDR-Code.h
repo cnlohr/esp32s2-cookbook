@@ -476,7 +476,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	int extra_codewords_due_to_header_padding = ( _sf <= 7 ) ? 1 : 0;
 
 	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
-	int header_ppm = ( _sf < 7 ) ? ( _sf - 2 ) : ( _sf > 11 ) ? ( _sf - 2 ) : ( _sf - 2 );
+	int header_ppm = ( _sf - 2 ); // ( _sf < 7 ) ? ( _sf - 2 ) : ( _sf > 11 ) ? ( _sf - 2 ) : ( _sf - 2 );
 	int data_ppm = _sf; 
 	// XXX TODO: Investigate: I thought SF12 had an LDRO mode which made the PPM only 10.
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
