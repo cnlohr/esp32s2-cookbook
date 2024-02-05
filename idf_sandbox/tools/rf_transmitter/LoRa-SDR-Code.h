@@ -450,8 +450,8 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 {
 	static int uctr = 0;
 	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[200] = { 0x40/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 40;
+	uint8_t payload_in[258] = { 0x40/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 250;
 	payload_in[1] = uctr++;
 	int _rdd = 0; // 1 = 4/5, 4 = 4/8 Coding Rate
 	int _whitening = 1; // Enable whitening

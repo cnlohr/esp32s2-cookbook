@@ -256,7 +256,7 @@ void sandbox_tick()
 
 	// 13rd harmonic.  
 	const float fRadiator = 904.1 + 0.00; // 0.02 is specific to this device.
-	const float fBandwidth = .125; // Actually de-tuning this a tiny bit seems to help things too.
+	const float fBandwidth = .1255; // Actually de-tuning this a tiny bit seems to help things too.
 	const float fHarmonic = 13.0;
 	const float fOffset = -(fBandwidth/2);
 	const float fXTAL = 40;

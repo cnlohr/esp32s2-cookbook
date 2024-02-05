@@ -32,7 +32,7 @@
 #define CHIPSSPREAD ((uint32_t)(240ULL*MARK_FROM_SF0*CHIPRATE))
 
 
-
+// For some reason, adding a small time offset too symbols and header makes them more readable.
 #define DATA_PHASE_OFFSET ( CHIPSSPREAD / 512 )
 
 #define PREAMBLE_CHIRPS 10
