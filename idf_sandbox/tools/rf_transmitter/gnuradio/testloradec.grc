@@ -119,6 +119,7 @@ blocks:
     alias: ''
     comment: ''
     en_uvec: 'True'
+    log_level: info
   states:
     bus_sink: false
     bus_source: false
@@ -159,7 +160,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [592, 160.0]
+    coordinate: [568, 176.0]
     rotation: 0
     state: enabled
 - name: fft_vxx_0
@@ -208,7 +209,7 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    soft_decoding: 'True'
+    soft_decoding: 'False'
   states:
     bus_sink: false
     bus_source: false
@@ -240,7 +241,7 @@ blocks:
     max_log_approx: 'True'
     maxoutbuf: '0'
     minoutbuf: '0'
-    soft_decoding: 'True'
+    soft_decoding: 'False'
   states:
     bus_sink: false
     bus_source: false
@@ -259,11 +260,11 @@ blocks:
     impl_head: 'False'
     maxoutbuf: '0'
     minoutbuf: '0'
-    os_factor: '8'
-    preamb_len: '6'
-    sf: '6'
+    os_factor: '20'
+    preamb_len: '8'
+    sf: '7'
     show_log_port: 'True'
-    sync_word: '0x43'
+    sync_word: '0x34'
   states:
     bus_sink: false
     bus_source: false
@@ -279,7 +280,7 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    soft_decoding: 'True'
+    soft_decoding: 'False'
   states:
     bus_sink: false
     bus_source: false
@@ -295,7 +296,7 @@ blocks:
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
-    soft_decoding: 'True'
+    soft_decoding: 'False'
   states:
     bus_sink: false
     bus_source: false
@@ -362,7 +363,7 @@ blocks:
     ant8: ''
     ant9: ''
     args: '"airspy=0"'
-    bb_gain0: '20'
+    bb_gain0: '10'
     bb_gain1: '20'
     bb_gain10: '20'
     bb_gain11: '20'
@@ -595,7 +596,7 @@ blocks:
     gain_mode7: 'False'
     gain_mode8: 'False'
     gain_mode9: 'False'
-    if_gain0: '20'
+    if_gain0: '10'
     if_gain1: '20'
     if_gain10: '20'
     if_gain11: '20'
@@ -663,7 +664,7 @@ blocks:
     minoutbuf: '0'
     nchan: '1'
     num_mboards: '1'
-    sample_rate: '3000000'
+    sample_rate: '2500000'
     sync: sync
     time_source0: ''
     time_source1: ''
@@ -678,9 +679,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [56, 188.0]
+    coordinate: [88, 188.0]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: qtgui_waterfall_sink_x_0
   id: qtgui_waterfall_sink_x
   parameters:
@@ -710,7 +711,7 @@ blocks:
     color9: '0'
     comment: ''
     fc: '903900000'
-    fftsize: '1024'
+    fftsize: '4096'
     freqhalf: 'True'
     grid: 'False'
     gui_hint: ''
@@ -1118,7 +1119,7 @@ blocks:
     bus_structure: null
     coordinate: [128, 468.0]
     rotation: 0
-    state: enabled
+    state: disabled
 - name: soapy_hackrf_source_0
   id: soapy_hackrf_source
   parameters:
@@ -1161,6 +1162,9 @@ connections:
 - [lora_sdr_hamming_dec_0, '0', lora_sdr_header_decoder_0, '0']
 - [lora_sdr_header_decoder_0, '0', lora_sdr_dewhitening_0, '0']
 - [lora_sdr_header_decoder_0, frame_info, lora_sdr_frame_sync_0, frame_info]
+- [osmosdr_source_0, '0', blocks_stream_to_vector_0, '0']
+- [osmosdr_source_0, '0', lora_sdr_frame_sync_0, '0']
+- [osmosdr_source_0, '0', qtgui_waterfall_sink_x_0, '0']
 - [rtlsdr_source_0, '0', blocks_stream_to_vector_0, '0']
 - [rtlsdr_source_0, '0', lora_sdr_frame_sync_0, '0']
 - [rtlsdr_source_0, '0', qtgui_waterfall_sink_x_0, '0']
@@ -1168,3 +1172,4 @@ connections:
 
 metadata:
   file_format: 1
+  grc_version: 3.10.7.0
