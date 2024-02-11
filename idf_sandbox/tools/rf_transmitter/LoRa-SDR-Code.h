@@ -1,3 +1,5 @@
+// XXX NOTE: esp32s2-cookbook/idf_sandbox/tools/rf_transmitter - SHOULD BECOME THE UPSTREAM VERSION
+
 /* This code is lifted from LoRa-SDR. I found this copyright at the top
  of one of their files:
 
