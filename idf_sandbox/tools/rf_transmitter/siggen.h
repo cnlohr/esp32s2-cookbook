@@ -4,9 +4,7 @@
 #include <string.h>
 #include "LoRa-SDR-Code.h"
 
-
-// From SF5, i.e. 8 would be SF8
-#define SF_NUMBER 7
+#define SF_NUMBER 6
 
 #define MAX_SYMBOLS 2070
 
@@ -87,9 +85,9 @@ static void SigSetupTest()
 	uint8_t syncword = 0x43;
 
 #if SF_NUMBER <= 6
-	#define CODEWORD_SHIFT 2 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
+	#define CODEWORD_SHIFT 0 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
 #elif SF_NUMBER >= 11
-	#define CODEWORD_SHIFT 3 // XXX TODO: Unknown for SF11, SF12 Might be 3?
+	#define CODEWORD_SHIFT 4 // XXX TODO: Unknown for SF11, SF12 Might be 3?
 #else
 	#define CODEWORD_SHIFT 3
 #endif
@@ -124,7 +122,7 @@ static void SigSetupTest()
 		int ofs = symbols[j];
 		//ofs = ofs ^ ((MARK_FROM_SF6<<6) -1);
 		//ofs &= (MARK_FROM_SF6<<6) -1;
-		qso = AddChirp( qso, ofs, DATA_PHASE_OFFSET );
+		qso = AddChirp( qso, ofs, 0 );
 	}
 	
 	quadsetcount = qso - quadsets;

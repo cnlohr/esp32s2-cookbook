@@ -468,20 +468,22 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	if( _sf == 7 ) nHeaderCodewords = 5; // CORRECT VALIDATED
 	if( _sf == 8 ) nHeaderCodewords = 6; // CORRECT VALIDATED
 	if( _sf == 9 ) nHeaderCodewords = 7; // CORRECT VALIDATED
-	if( _sf == 10 ) nHeaderCodewords = 8;
+	if( _sf == 10 ) nHeaderCodewords = 8; // CORRECT VALIDATED
 	if( _sf == 11 ) nHeaderCodewords = 9;  // ???? Probably Wrong
 	if( _sf == 12 ) nHeaderCodewords = 10;  // ???? Probably Wrong
 
-	int header_ppm_shift_up_by = 2;
+	int extra_codewords_due_to_header_padding = ( _sf == 7 || _sf == 11 /* CHECKME PROBABLY NOT 6 */ ) ? 1 : 0;
+
+
 	// SF6 still isn't working. 
 	// header does not reduce SF on SF <= 6 https://github.com/tapparelj/gr-lora_sdr/compare/master...feature/sf5_6_sx126x#diff-1821161335c7f28236eb88e3b8a3c84cce6997861cd847e87fbc9e270d338a37R68
 	// Indirectly, to note, for SF > 6, the header is implicitly LDRO (the bottom 2 bits are ignored)
-	if( _sf < 7 ) header_ppm_shift_up_by = 0;
 
-	int extra_codewords_due_to_header_padding = ( _sf == 7 || _sf == 6 /* CHECKME */ ) ? 1 : 0;
+	int header_ppm_shift_up_by = ( _sf >= 7 ) ? 2 : 0;
+	int data_ppm_shift_back_by = (_sf >= 11 ) ? 2 : 0; // LDRO
 
 	int header_ppm = ( _sf - header_ppm_shift_up_by );
-	int data_ppm = _sf;
+	int data_ppm = ( _sf - data_ppm_shift_back_by );
 
 	// XXX TODO: Investigate: I thought SF12 had an LDRO mode which made the PPM only 10.
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
@@ -548,16 +550,16 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	// Whitening for the data that lives inside the header block.
 	if( _whitening )
 	{
-		Sx1272ComputeWhitening(codewords + cOfs1, PPM - cOfs1, 0, HEADER_RDD);
+		Sx1272ComputeWhitening(codewords + cOfs1, data_ppm - cOfs1, 0, HEADER_RDD);
 	}
 
-	if (numCodewords > PPM) {
+	if (numCodewords > data_ppm) {
 		size_t cOfs2 = cOfs;
 
-		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_plus_two_extra_crc_bytes, numCodewords-PPM);
+		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_plus_two_extra_crc_bytes, numCodewords-data_ppm);
 
 		if (_whitening) {
-			Sx1272ComputeWhitening(codewords + cOfs2, numCodewords - PPM, PPM - cOfs1, _rdd);
+			Sx1272ComputeWhitening(codewords + cOfs2, numCodewords - data_ppm, data_ppm - cOfs1, _rdd);
 		}
 	}
 
@@ -575,21 +577,20 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;
+	uprintf( "_sf: %d   PPM: %d  header_ppm: %d  data_ppm: %d\n", _sf, PPM, header_ppm, data_ppm );
 	for( i = 0; i < symbols_size; i++ )
 	{
 		int is_header = (i < 8);
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
-		sym <<= (_sf - PPM);
-		symbols[i] = sym; // OR +1
-	}
 
-	// The first header symbols are all shifted by 2.
-	// XXX TODO Look here for SF6 stuff.
-	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
-	{
-		symbols[i] <<= header_ppm_shift_up_by;
+		int shiftup = _sf - (( i < N_HEADER_SYMBOLS )?header_ppm:data_ppm );
+		sym <<= shiftup;
+		symbols[i] = sym; // OR +1
+		uprintf( "%03x ", sym );
 	}
+	uprintf( "\n" );
+	
 
 	*symbol_out_count = symbols_size;
 	return 0;

@@ -255,8 +255,8 @@ void sandbox_tick()
 	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
 	// 13rd harmonic.  
-	const float fRadiator = 904.1 + 0.00; // 0.02 is specific to this device.
-	const float fBandwidth = .1255; // Actually de-tuning this a tiny bit seems to help things too.
+	const float fRadiator = 904.10 + 0.00; // 0.02 is specific to this device.
+	const float fBandwidth = .125;
 	const float fHarmonic = 13.0;
 	const float fOffset = -(fBandwidth/2);
 	const float fXTAL = 40;
@@ -297,8 +297,8 @@ void sandbox_tick()
 #else
 
 	uint32_t start = getCycleCount();
-	frame = (start) % 24000000;
-	if( (uint32_t)(start - lastend) > 240000000 )
+	frame = (start) % 4000000;
+	if( (uint32_t)(start - lastend) > 40000000 )
 	{
 		SigSetupTest();
 		int iterct = 0;
