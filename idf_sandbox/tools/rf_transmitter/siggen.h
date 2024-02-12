@@ -6,7 +6,7 @@
 
 
 // From SF5, i.e. 8 would be SF8
-#define ADDSF 8
+#define SF_NUMBER 7
 
 #define MAX_SYMBOLS 2070
 
@@ -22,7 +22,7 @@
 // 7 * 4/5 = 5.6 data bits per symbol.
 // https://wirelesspi.com/understanding-lora-phy-long-range-physical-layer/ says 7 for SF7
 
-#define MARK_FROM_SF0 (1<<ADDSF)
+#define MARK_FROM_SF0 (1<<SF_NUMBER)
 
 // Determined experimentally, but this is the amount you have to divide the chip by to
 // Fully use the 125000 Hz channel Bandwidth.
@@ -57,7 +57,14 @@ int32_t * AddChirp( int32_t * qso, int offset, int verneer )
 static void SigSetupTest()
 {
 	memset( symbols, 0, sizeof( symbols ) );
-	int r = CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, ADDSF );
+
+	uint8_t payload_in[258] = { 0x40/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
+	int payload_in_size = 6;
+	static uint8_t uctr;
+	payload_in[4] = uctr++;
+	int _rdd = 0; // 1 = 4/5, 4 = 4/8 Coding Rate
+
+	int r = CreateMessageFromPayload( symbols, &symbols_len, MAX_SYMBOLS, SF_NUMBER, 4, payload_in, payload_in_size );
 
 	if( r < 0 )
 	{
@@ -79,9 +86,9 @@ static void SigSetupTest()
 
 	uint8_t syncword = 0x43;
 
-#if ADDSF <= 6
+#if SF_NUMBER <= 6
 	#define CODEWORD_SHIFT 2 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
-#elif ADDSF >= 11
+#elif SF_NUMBER >= 11
 	#define CODEWORD_SHIFT 3 // XXX TODO: Unknown for SF11, SF12 Might be 3?
 #else
 	#define CODEWORD_SHIFT 3
@@ -103,7 +110,7 @@ static void SigSetupTest()
 	*(qso++) = -(CHIPSSPREAD * 3 / 4 )-1;
 	*(qso++) = -(CHIPSSPREAD * 0 / 4 )-1;
 
-	if( ADDSF <= 6 )
+	if( SF_NUMBER <= 6 )
 	{
 		// Two additional upchirps with SF6 https://github.com/tapparelj/gr-lora_sdr/issues/74#issuecomment-1891569580
 		for( j = 0; j < 2; j++ )

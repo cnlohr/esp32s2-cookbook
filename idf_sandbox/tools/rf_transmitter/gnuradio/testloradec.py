@@ -6,29 +6,40 @@
 #
 # GNU Radio Python Flow Graph
 # Title: Not titled yet
-# GNU Radio version: 3.10.7.0
+# GNU Radio version: 3.10.1.1
 
 from packaging.version import Version as StrictVersion
+
+if __name__ == '__main__':
+    import ctypes
+    import sys
+    if sys.platform.startswith('linux'):
+        try:
+            x11 = ctypes.cdll.LoadLibrary('libX11.so')
+            x11.XInitThreads()
+        except:
+            print("Warning: failed to XInitThreads()")
+
 from PyQt5 import Qt
 from gnuradio import qtgui
+from gnuradio.filter import firdes
+import sip
 from gnuradio import blocks
-from gnuradio import blocks, gr
 from gnuradio import fft
 from gnuradio.fft import window
 from gnuradio import gr
-from gnuradio.filter import firdes
 import sys
 import signal
-from PyQt5 import Qt
 from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
 import gnuradio.lora_sdr as lora_sdr
 import osmosdr
 import time
-import sip
 
 
+
+from gnuradio import qtgui
 
 class testloradec(gr.top_block, Qt.QWidget):
 
@@ -39,8 +50,8 @@ class testloradec(gr.top_block, Qt.QWidget):
         qtgui.util.check_set_qss()
         try:
             self.setWindowIcon(Qt.QIcon.fromTheme('gnuradio-grc'))
-        except BaseException as exc:
-            print(f"Qt GUI: Could not set Icon: {str(exc)}", file=sys.stderr)
+        except:
+            pass
         self.top_scroll_layout = Qt.QVBoxLayout()
         self.setLayout(self.top_scroll_layout)
         self.top_scroll = Qt.QScrollArea()
@@ -60,18 +71,17 @@ class testloradec(gr.top_block, Qt.QWidget):
                 self.restoreGeometry(self.settings.value("geometry").toByteArray())
             else:
                 self.restoreGeometry(self.settings.value("geometry"))
-        except BaseException as exc:
-            print(f"Qt GUI: Could not restore geometry: {str(exc)}", file=sys.stderr)
+        except:
+            pass
 
         ##################################################
         # Variables
         ##################################################
-        self.FFTSIZE = FFTSIZE = 256
+        self.FFTSIZE = FFTSIZE = 512
 
         ##################################################
         # Blocks
         ##################################################
-
         self.qtgui_waterfall_sink_x_0 = qtgui.waterfall_sink_c(
             4096, #size
             window.WIN_BLACKMAN_hARRIS, #wintype
@@ -133,7 +143,7 @@ class testloradec(gr.top_block, Qt.QWidget):
         self.fft_vxx_0 = fft.fft_vcc(FFTSIZE, True, window.blackmanharris(FFTSIZE), True, 1)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, FFTSIZE)
         self.blocks_nlog10_ff_0 = blocks.nlog10_ff(1, FFTSIZE, 0)
-        self.blocks_message_debug_0 = blocks.message_debug(True, gr.log_levels.info)
+        self.blocks_message_debug_0 = blocks.message_debug(True)
         self.blocks_file_sink_1 = blocks.file_sink(gr.sizeof_float*FFTSIZE, '/tmp/samplelog.dat', False)
         self.blocks_file_sink_1.set_unbuffered(False)
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_float*1, '/tmp/test.txt', False)

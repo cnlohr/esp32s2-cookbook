@@ -37,7 +37,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '256'
+    value: '512'
   states:
     bus_sink: false
     bus_source: false
@@ -119,7 +119,6 @@ blocks:
     alias: ''
     comment: ''
     en_uvec: 'True'
-    log_level: info
   states:
     bus_sink: false
     bus_source: false
@@ -1172,4 +1171,3 @@ connections:
 
 metadata:
   file_format: 1
-  grc_version: 3.10.7.0

@@ -1,4 +1,4 @@
-// XXX NOTE: esp32s2-cookbook/idf_sandbox/tools/rf_transmitter - SHOULD BECOME THE UPSTREAM VERSION
+// NOTE: esp32s2-cookbook/idf_sandbox/tools/rf_transmitter - IS UPSTREAM VERSION
 
 /* This code is lifted from LoRa-SDR. I found this copyright at the top
  of one of their files:
@@ -18,6 +18,7 @@ Hopefully that covers some of the other stuff.
 
 // From LoRaCodes.hpp
 
+#include <string.h>
 
 /***********************************************************************
  * Defines
@@ -370,11 +371,13 @@ static void diagonalInterleaveSx(const uint8_t *codewords, const size_t numCodew
 		const size_t cwOff = x*PPM;
 		const size_t symOff = x*(4 + RDD);
 		for (size_t k = 0; k < 4 + RDD; k++){
+			uint16_t s = symbols[symOff + k];
 			for (size_t m = 0; m < PPM; m++){
 				const size_t i = (m + k + PPM) % PPM;
 				const int bit = (codewords[cwOff + i] >> k) & 0x1;
-				symbols[symOff + k] |= (bit << m);
+				s |= (bit << m);
 			}
+			symbols[symOff + k] = s;
 		}
 	}
 }
@@ -446,75 +449,76 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 	}
 }
 
-
-
-static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf )
+static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf, int _rdd, uint8_t * payload_plus_two_extra_crc_bytes, int payload_length )
 {
 	static int uctr = 0;
-	// Payload may have 2 extra bytes for CRC.
-	uint8_t payload_in[258] = { 0x40/*0x48*/, 0xcc/*0x45*/, 0xde, 0x55, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22}; 
-	int payload_in_size = 250;
-	payload_in[1] = uctr++;
-	int _rdd = 0; // 1 = 4/5, 4 = 4/8 Coding Rate
+
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
 
 	size_t PPM = _sf;
 
-	// SF11 is pretty close.
-
 	int _explicit = 1;
+
+	// TODO: https://dl.acm.org/doi/fullHtml/10.1145/3546869#sec-9 -- what about the corner cases for SF6, etc.
 
 	// SF6 does NOT WORK
 	int nHeaderCodewords = 0;
-	if( _sf == 6 ) nHeaderCodewords = 5;
-	if( _sf == 7 ) nHeaderCodewords = 5;
-	if( _sf == 8 ) nHeaderCodewords = 6;
-	if( _sf == 9 ) nHeaderCodewords = 7;
+	if( _sf == 6 ) nHeaderCodewords = 6;
+	if( _sf == 7 ) nHeaderCodewords = 5; // CORRECT VALIDATED
+	if( _sf == 8 ) nHeaderCodewords = 6; // CORRECT VALIDATED
+	if( _sf == 9 ) nHeaderCodewords = 7; // CORRECT VALIDATED
 	if( _sf == 10 ) nHeaderCodewords = 8;
-	if( _sf == 11 ) nHeaderCodewords = 9;  // ???? Probably Wrong (I can't get SF11 working)
+	if( _sf == 11 ) nHeaderCodewords = 9;  // ???? Probably Wrong
 	if( _sf == 12 ) nHeaderCodewords = 10;  // ???? Probably Wrong
 
-	int extra_codewords_due_to_header_padding = ( _sf <= 7 ) ? 1 : 0;
+	int header_ppm_shift_up_by = 2;
+	// SF6 still isn't working. 
+	// header does not reduce SF on SF <= 6 https://github.com/tapparelj/gr-lora_sdr/compare/master...feature/sf5_6_sx126x#diff-1821161335c7f28236eb88e3b8a3c84cce6997861cd847e87fbc9e270d338a37R68
+	// Indirectly, to note, for SF > 6, the header is implicitly LDRO (the bottom 2 bits are ignored)
+	if( _sf < 7 ) header_ppm_shift_up_by = 0;
 
-	// THE FOLLOWING LINE IS WRONG. XXX WRONG XXX SF5/6 Unknown behavior.
-	int header_ppm =  ( _sf < 7 ) ? ( _sf ) : ( _sf - 2 );
-	int data_ppm = _sf; 
+	int extra_codewords_due_to_header_padding = ( _sf == 7 || _sf == 6 /* CHECKME */ ) ? 1 : 0;
+
+	int header_ppm = ( _sf - header_ppm_shift_up_by );
+	int data_ppm = _sf;
+
 	// XXX TODO: Investigate: I thought SF12 had an LDRO mode which made the PPM only 10.
 	// TODO: Compare to https://github.com/jkadbear/LoRaPHY/blob/master/LoRaPHY.m
 
-	const size_t numCodewords = roundUp( ( payload_in_size + 2 * _crc ) * 2 + (_explicit ? nHeaderCodewords:0) + extra_codewords_due_to_header_padding, PPM);
+	const size_t numCodewords = roundUp( ( payload_length + 2 * _crc ) * 2 + (_explicit ? nHeaderCodewords:0) + extra_codewords_due_to_header_padding, PPM);
 	const size_t numSymbols = N_HEADER_SYMBOLS + (numCodewords / PPM - 1) * (4 + _rdd);		// header is always coded with 8/4
 	uint8_t codewords[numCodewords];
 	memset( codewords, 0, sizeof( codewords ) );
 
 	if( numSymbols >= max_symbols )
 	{
-		uprintf( "Error: Too many symbols to fit (%d/%d)\n", numSymbols, max_symbols );
+		//uprintf( "Error: Too many symbols to fit (%d/%d)\n", numSymbols, max_symbols );
 		return -1;
 	}
-	
+
+	memset( symbols, 0, numSymbols * sizeof( symbols[0] ) );
+
 	size_t cOfs = 0;
 	size_t dOfs = 0;
 
 	//std::vector<uint8_t> codewords(numCodewords);
 	if (_crc)
 	{
-		uint16_t crc = sx1272DataChecksum( payload_in, payload_in_size );
-		payload_in[payload_in_size] = crc & 0xff;
-		payload_in[payload_in_size+1] = (crc >> 8) & 0xff;
+		uint16_t crc = sx1272DataChecksum( payload_plus_two_extra_crc_bytes, payload_length );
+		payload_plus_two_extra_crc_bytes[payload_length] = crc & 0xff;
+		payload_plus_two_extra_crc_bytes[payload_length+1] = (crc >> 8) & 0xff;
 	}
 
 	// Why does this disagree? https://www.Carloalbertoboano.Com/Documents/Yang22emu.Pdf  
 	if (_explicit) {
 		uint8_t hdr[3];
-		hdr[0] = payload_in_size;
+		hdr[0] = payload_length;
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
 		static int k;
 		hdr[2] = 
 			//k++;
 			headerChecksum(hdr);
-		uprintf( "Sending csum: %02x\n", hdr[2] );
 
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] >> 4);
 		codewords[cOfs++] = encodeHamming84sx(hdr[0] & 0xf);	// length
@@ -537,11 +541,9 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	}
 
 	size_t cOfs1 = cOfs;
-	encodeFec( codewords, 4 /* 8/4 */, &cOfs, &dOfs, payload_in, PPM - cOfs );
 
-	uprintf( "cofs/dofs: %d %d\n", cOfs, dOfs );
-	uprintf( "HP0: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // PPM:%d HEADER_RDD:%d numCodewords:%d // payload_in_size:%d ;;  numSymbols: %d 3=%d\n", codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,
- numSymbols, 3 );
+	// Header is encoded at 8/4 (4)
+	encodeFec( codewords, 4, &cOfs, &dOfs, payload_plus_two_extra_crc_bytes, PPM - cOfs );
 
 	// Whitening for the data that lives inside the header block.
 	if( _whitening )
@@ -552,33 +554,24 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	if (numCodewords > PPM) {
 		size_t cOfs2 = cOfs;
 
-		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_in, numCodewords-PPM);
+		encodeFec(codewords, _rdd, &cOfs, &dOfs, payload_plus_two_extra_crc_bytes, numCodewords-PPM);
 
 		if (_whitening) {
 			Sx1272ComputeWhitening(codewords + cOfs2, numCodewords - PPM, PPM - cOfs1, _rdd);
 		}
 	}
 
-	 uprintf( "HPP: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", codewords[0], codewords[1], codewords[2], codewords[3], codewords[4], codewords[5], codewords[6], codewords[7],codewords[8], codewords[9], codewords[10],codewords[11],codewords[12],codewords[13],codewords[14],codewords[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
-
 	//interleave the codewords into symbols
 	int symbols_size = numSymbols;
 
 	// TRICKY: Header is forced to a particularly slow mode.
-	diagonalInterleaveSx(codewords, nHeaderCodewords, symbols, header_ppm, HEADER_RDD);
+	diagonalInterleaveSx(codewords, header_ppm, symbols, header_ppm, HEADER_RDD);
 
 	int i;
-	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
-	{
-		symbols[i] *= 4;
-	}
 
 	if (numCodewords > header_ppm) {
 		diagonalInterleaveSx(codewords + nHeaderCodewords, numCodewords-nHeaderCodewords, symbols+N_HEADER_SYMBOLS, data_ppm, _rdd);
 	}
-
-
-	uprintf( "HAM: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size, PPM,numCodewords, numSymbols );
 
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;
@@ -586,18 +579,17 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 	{
 		int is_header = (i < 8);
 		sym = symbols[i];
-		// Fixup header range.
-		//if( _sf <= 6 && i < 8 ) sym>>= 2;
 		sym = grayToBinary16(sym);
 		sym <<= (_sf - PPM);
 		symbols[i] = sym; // OR +1
 	}
 
-
-	uprintf( "HAM: %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d\n", symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size, PPM,numCodewords, numSymbols );
-
-	//uprintf( "GRA: %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x / %02x %02x %02x %02x %02x %02x %02x %02x // %d %d %d // %d ;; %d %d %d %d %d\n", hdr[0], hdr[1], hdr[2], symbols[0], symbols[1], symbols[2], symbols[3], symbols[4], symbols[5], symbols[6], symbols[7],symbols[8], symbols[9], symbols[10],symbols[11],symbols[12],symbols[13],symbols[14],symbols[15], PPM , HEADER_RDD, numCodewords, payload_in_size,PPM,numCodewords, numSymbols );
-
+	// The first header symbols are all shifted by 2.
+	// XXX TODO Look here for SF6 stuff.
+	for( i = 0; i < N_HEADER_SYMBOLS; i++ )
+	{
+		symbols[i] <<= header_ppm_shift_up_by;
+	}
 
 	*symbol_out_count = symbols_size;
 	return 0;
