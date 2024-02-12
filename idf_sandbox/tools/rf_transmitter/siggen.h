@@ -4,7 +4,7 @@
 #include <string.h>
 #include "LoRa-SDR-Code.h"
 
-#define SF_NUMBER 6
+#define SF_NUMBER 7
 
 #define MAX_SYMBOLS 2070
 
