@@ -4,7 +4,7 @@
 #include <string.h>
 #include "LoRa-SDR-Code.h"
 
-#define SF_NUMBER 7
+#define SF_NUMBER 10
 
 #define MAX_SYMBOLS 2070
 
@@ -28,10 +28,6 @@
 
 #define CHIPRATE 8 // chirp length for SF0, in us
 #define CHIPSSPREAD ((uint32_t)(240ULL*MARK_FROM_SF0*CHIPRATE))
-
-
-// For some reason, adding a small time offset too symbols and header makes them more readable.
-#define DATA_PHASE_OFFSET ( CHIPSSPREAD / 512 )
 
 #define PREAMBLE_CHIRPS 10
 #define CODEWORD_LENGTH 2
@@ -85,9 +81,9 @@ static void SigSetupTest()
 	uint8_t syncword = 0x43;
 
 #if SF_NUMBER <= 6
-	#define CODEWORD_SHIFT 0 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
+	#define CODEWORD_SHIFT 2 // XXX TODO: No idea what this would do here! XXX This is probably wrong.
 #elif SF_NUMBER >= 11
-	#define CODEWORD_SHIFT 4 // XXX TODO: Unknown for SF11, SF12 Might be 3?
+	#define CODEWORD_SHIFT 5 // XXX TODO: Unknown for SF11, SF12 Might be 3?
 #else
 	#define CODEWORD_SHIFT 3
 #endif

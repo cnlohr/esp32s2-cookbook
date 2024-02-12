@@ -451,8 +451,6 @@ static void encodeFec(uint8_t  * codewords, const size_t RDD, size_t * cOfs, siz
 
 static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count, int max_symbols, int _sf, int _rdd, uint8_t * payload_plus_two_extra_crc_bytes, int payload_length )
 {
-	static int uctr = 0;
-
 	int _whitening = 1; // Enable whitening
 	int _crc = 1; // Enable CRC.
 
@@ -517,7 +515,7 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 		uint8_t hdr[3];
 		hdr[0] = payload_length;
 		hdr[1] = (_crc ? 1 : 0) | (_rdd << 1);
-		static int k;
+		//static int k;
 		hdr[2] = 
 			//k++;
 			headerChecksum(hdr);
@@ -577,20 +575,15 @@ static int CreateMessageFromPayload( uint16_t * symbols, int * symbol_out_count,
 
 	//gray decode, when SF > PPM, pad out LSBs
 	uint16_t sym;
-	uprintf( "_sf: %d   PPM: %d  header_ppm: %d  data_ppm: %d\n", _sf, PPM, header_ppm, data_ppm );
+	//uprintf( "_sf: %d   PPM: %d  header_ppm: %d  data_ppm: %d\n", _sf, PPM, header_ppm, data_ppm );
 	for( i = 0; i < symbols_size; i++ )
 	{
-		int is_header = (i < 8);
 		sym = symbols[i];
 		sym = grayToBinary16(sym);
-
 		int shiftup = _sf - (( i < N_HEADER_SYMBOLS )?header_ppm:data_ppm );
 		sym <<= shiftup;
 		symbols[i] = sym; // OR +1
-		uprintf( "%03x ", sym );
 	}
-	uprintf( "\n" );
-	
 
 	*symbol_out_count = symbols_size;
 	return 0;
