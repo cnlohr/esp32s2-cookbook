@@ -59,6 +59,7 @@ struct SWIOState state;
 
 void sandbox_main()
 {
+	esp_rom_delay_us(500000); // add a bit of delay before configuring GPIO, otherwise the current draw of the target board might corrupt the usb enumeration.
 	REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
 	REG_WRITE( IO_MUX_REG(VDD3V3_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
 	REG_WRITE( IO_MUX_REG(VDD5V_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //5V for part 40mA drive.
