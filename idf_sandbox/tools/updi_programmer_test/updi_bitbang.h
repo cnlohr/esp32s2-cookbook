@@ -413,7 +413,7 @@ static int UPDIFlash( uint32_t pinmask, int clocks_per_bit, uint8_t * program, i
 	for( bo = 0; bo < 32; bo++ )
 		r = UPDIWriteMemoryWord( pinmask, clocks_per_bit, 0x8000 + bo*2, 0xaa55 );
 	uprintf( "WWWW: %02x\n", r );
-	r = UPDIWriteMemoryByte( pinmask, clocks_per_bit, 0x1000 + 0 /*NVMCTRL.CTRLA*/, 0x03 ); // Write page
+	r = UPDIWriteMemoryByte( pinmask, clocks_per_bit, 0x1000 + 0 /*NVMCTRL.CTRLA*/, 0x03 ); // Erase and Write page
 
 	int to_max = 10;
 	int to;
@@ -425,7 +425,7 @@ static int UPDIFlash( uint32_t pinmask, int clocks_per_bit, uint8_t * program, i
 		break;
 	}
 
-	uprintf( "TO : %d\n", to );
+	uprintf( "TO : %d / final: %02x\n", to, r  );
 	r = UPDIReadMemoryByte( pinmask, clocks_per_bit, 0x8000 );
 	uprintf( "RRRRR: %02x\n", r );
 	r = UPDIReadMemoryByte( pinmask, clocks_per_bit, 0x8000 );
