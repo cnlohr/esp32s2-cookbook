@@ -88,8 +88,8 @@ void sandbox_main()
 	int r = UPDISetup( pinmask, m.freq_mhz, 115200, &clocks_per_bit, sib );
 	uprintf( "UPDISetup() = %d -> %s\n", r, sib );
 
-	r = UPDIErase( pinmask, clocks_per_bit );
-	uprintf( "UPDIErase() = %d\n", r );
+//	r = UPDIErase( pinmask, clocks_per_bit );
+	//uprintf( "UPDIErase() = %d\n", r );
 
 	uint8_t  testprog[] = {
 0x12,0xc0,0x24,0xc0,0x23,0xc0,0x22,0xc0,0x21,0xc0,0x20,0xc0,0x1f,0xc0,0x1e,0xc0,
