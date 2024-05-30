@@ -60,6 +60,9 @@ void sandbox_main()
 	UPDIPowerOn( pinmask, pinmaskpower );
 	int clocks_per_bit = 0;
 	uint8_t sib[17] = { 0 };
+	rtc_cpu_freq_config_t m;
+	rtc_clk_cpu_freq_get_config( &m );
+	updi_clocks_per_bit = UPDIComputeClocksPerBit( m.freq_mhz, 115200 );
 	int r = UPDISetup( pinmask, m.freq_mhz, 115200, &clocks_per_bit, sib );
 	uprintf( "UPDISetup() = %d -> %s\n", r, sib );
 
