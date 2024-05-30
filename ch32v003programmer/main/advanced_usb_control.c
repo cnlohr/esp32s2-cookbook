@@ -14,7 +14,6 @@
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"  // for WRITE_PERI_REG
 #include <esp_heap_caps.h>
-
 #include "esp_flash.h"
 
 // Uncomment the ESP_LOGI to activate logging for this file.
