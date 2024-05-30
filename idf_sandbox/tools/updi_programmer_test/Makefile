@@ -39,7 +39,7 @@ monitor : ../common/sandbox_interactive
 	../common/sandbox_interactive
 
 interactive : ../common/sandbox_interactive build
-	../common/sandbox_interactive sandbox.c sandbox.S $(SYSELF)
+	../common/sandbox_interactive updi_bitbang.h sandbox.c sandbox.S $(SYSELF)
 
 clean :
 	rm -rf *.o *~ build/sandbox_inst.bin build/sandbox_data.bin build/buildhelp build/sandbox.o sandbox_upload build/sandbox.lds build/provided.lds build/sandbox_symbols.txt build/system_symbols.txt sandbox_interactive buildhelp.exe sandbox_upload.exe

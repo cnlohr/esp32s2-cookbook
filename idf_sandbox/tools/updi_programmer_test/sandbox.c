@@ -24,10 +24,13 @@
 #define MAX_IN_TIMEOUT 1000
 #include "updi_bitbang.h"
 
-uint32_t t1coeff;
 uint32_t pinmask, pinmaskpower;
 uint8_t retbuff[256];
 uint8_t * retbuffptr = 0;
+
+
+static int updi_clocks_per_bit;
+
 
 void sandbox_main()
 {	
@@ -51,36 +54,8 @@ void sandbox_main()
 
 	rtc_cpu_freq_config_t m;
 	rtc_clk_cpu_freq_get_config( &m );
-	switch( m.freq_mhz )
-	{
-	case 240:
-		t1coeff = 9; // 9 or 10 is good.  5 is too low. 13 is sometimes too high.
-		break;
-	default:
-		t1coeff = 100; // Untested At Other Speeds
-		break;
-	}
-
-
+	updi_clocks_per_bit = UPDIComputeClocksPerBit( m.freq_mhz, 115200 );
 #if 0
-//	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
-	SendWord32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
-	SendWord32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
-
-	uint32_t rval = 0;
-	int r = ReadWord32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
-	uprintf( "CPBR: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
-	
-	#if 0
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-	SendWord32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
-	#endif
-	
-	r = ReadWord32( t1coeff, pinmask, 0x11, &rval ); // 
-	uprintf( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
-#endif
 
 	UPDIPowerOn( pinmask, pinmaskpower );
 	int clocks_per_bit = 0;
@@ -95,19 +70,39 @@ void sandbox_main()
 0x12,0xc0,0x24,0xc0,0x23,0xc0,0x22,0xc0,0x21,0xc0,0x20,0xc0,0x1f,0xc0,0x1e,0xc0,
 0x1d,0xc0,0x1c,0xc0,0x1b,0xc0,0x1a,0xc0,0x19,0xc0,0x18,0xc0,0x17,0xc0,0x16,0xc0,
 0x15,0xc0,0x14,0xc0,0x13,0xc0,0x11,0x24,0x1f,0xbe,0xcf,0xe5,0xd1,0xe0,0xde,0xbf,
-0xcd,0xbf,0x10,0xe0,0xa0,0xe6,0xb0,0xe0,0xe2,0xea,0xf0,0xe0,0x2,0xc0,0x5,0x90,
-0xd,0x92,0xa2,0x36,0xb1,0x7,0xd9,0xf7,0x2,0xd0,0x29,0xc0,0xd9,0xcf,0xe0,0x91,
-0x60,0x0,0xf0,0x91,0x61,0x0,0x80,0x81,0x81,0x60,0x80,0x83,0xe0,0x91,0x60,0x0,
-0xf0,0x91,0x61,0x0,0x84,0x81,0x81,0x60,0x84,0x83,0x2f,0xef,0x84,0xe3,0x9c,0xe0,
-0x21,0x50,0x80,0x40,0x90,0x40,0xe1,0xf7,0x0,0xc0,0x0,0x0,0xe0,0x91,0x60,0x0,
-0xf0,0x91,0x61,0x0,0x84,0x81,0x8e,0x7f,0x84,0x83,0x2f,0xef,0x84,0xe3,0x9c,0xe0,
-0x21,0x50,0x80,0x40,0x90,0x40,0xe1,0xf7,0x0,0xc0,0x0,0x0,0xdf,0xcf,0xf8,0x94,
-0xff,0xcf,0x40,0x4 };
+0xcd,0xbf,0x10,0xe0,0xa0,0xe6,0xb0,0xe0,0xe6,0xe8,0xf0,0xe0,0x2,0xc0,0x5,0x90,
+0xd,0x92,0xa4,0x36,0xb1,0x7,0xd9,0xf7,0x2,0xd0,0x1b,0xc0,0xd9,0xcf,0xe0,0x91,
+0x60,0x0,0xf0,0x91,0x61,0x0,0x81,0xe0,0x81,0x83,0xe0,0x91,0x62,0x0,0xf0,0x91,
+0x63,0x0,0x80,0xe1,0x81,0x83,0xa0,0x91,0x60,0x0,0xb0,0x91,0x61,0x0,0xe0,0x91,
+0x62,0x0,0xf0,0x91,0x63,0x0,0x91,0xe0,0x17,0x96,0x9c,0x93,0x17,0x97,0x87,0x83,
+0xfb,0xcf,0xf8,0x94,0xff,0xcf,0x40,0x4,0x0,0x4,
+ };
 
 	r = UPDIFlash( pinmask, clocks_per_bit, testprog, sizeof(testprog), 0);
-	printf( "UPDIFlash() = %d\n", r );
+	uprintf( "UPDIFlash() = %d\n", r );
+
+
+	uint8_t membuff[512] = { 0 };
+
+	r = UPDIReadMemoryArea( pinmask, clocks_per_bit, 0x8000, membuff, sizeof( membuff ));
+	uprintf( "UPDIReadMemoryArea() = %d\n", r );
+
+	int i;
+	for( i = 0; i < sizeof( membuff ); i++ )
+	{
+		uprintf( "%02x ", membuff[i] );
+		if( (i & 0xf ) == 0xf || i == sizeof( membuff)-1  )  uprintf( "\n" );
+	}
+
+	UPDIReset( pinmask, clocks_per_bit );
+
+	UPDIPowerOff( pinmask, pinmaskpower );
+	esp_rom_delay_us(100000);
+	UPDIPowerOn( pinmask, pinmaskpower );
 
 	uprintf( "...\n" );
+#endif
+
 }
 
 void teardown()
@@ -146,9 +141,9 @@ void sandbox_tick()
 */
 }
 
+
 int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 {
-#if 0
 	if( is_get )
 	{
 		int len = retbuffptr - retbuff;
@@ -158,7 +153,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 		retbuffptr = retbuff;
 		return len+1;
 	}
-	
+
 	// Is send.
 	// buffer[0] is the request ID.
 	uint8_t * iptr = &buffer[1];
@@ -166,64 +161,75 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 	{
 		uint8_t cmd = *(iptr++);
 		int remain = reqlen - (iptr - buffer);
-		if( cmd == 0xfe ) // We will never write to 0x7f.
+
+		switch( cmd )
 		{
-			cmd = *(iptr++);
-			switch( cmd )
+		case 0x90:
+		{
+			rtc_cpu_freq_config_t m;
+			rtc_clk_cpu_freq_get_config( &m );
+
+			if( (sizeof(retbuff)-(retbuffptr - retbuff)) >= 18 )
 			{
-			case 0x01:
-				DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
-				break;
-			case 0x02: // Power-down 
-				uprintf( "Power down\n" );
-				GPIO.out_w1tc = pinmaskpower;
-				GPIO.enable_w1ts = pinmaskpower;
-				GPIO.out_w1tc = pinmask;
-				GPIO.enable_w1ts = pinmask;
-				break;
-			case 0x03: // Power-up
-				GPIO.out_w1ts = pinmaskpower;
-				GPIO.enable_w1ts = pinmaskpower;
-				GPIO.out_w1ts = pinmask;
-				GPIO.enable_w1ts = pinmask;
-				break;
-			case 0x04: // Delay( uint16_t us )
-				esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
-				iptr += 2;
-				break;
+				UPDIPowerOn( pinmask, pinmaskpower );
+				uint8_t sib[17] = { 0 };
+				int r = UPDISetup( pinmask, m.freq_mhz, updi_clocks_per_bit, sib );
+				uprintf( "UPDISetup() = %d -> %s\n", r, sib );
+
+				retbuffptr[0] = r;
+				memcpy( retbuffptr + 1, sib, 17 );
+				retbuffptr += 18;
 			}
-		} else if( cmd == 0xff )
-		{
 			break;
 		}
-		else
+		case 0x91:
 		{
-			// Otherwise it's a regular command.
-			// 7-bit-cmd .. 1-bit read(0) or write(1) 
-			// if command lines up to a normal QingKeV2 debug command, treat it as that command.
+			UPDIPowerOn( pinmask, pinmaskpower );
+			break;
+		}
+		case 0x92:
+		{
+			UPDIPowerOff( pinmask, pinmaskpower );
+			break;
+		}
+		case 0x93: // Flash 64-byte block.
+		{
+			if( remain >= 2+64 )
+			{
+				int addytowrite = *(iptr++);
+				addytowrite |= (*(iptr++))<<8;
+				int r;
+				r = UPDIFlash( pinmask, updi_clocks_per_bit, addytowrite, iptr, 64, 0);
+				uprintf( "Flash Response: %d\n", r );
+				iptr += 64;
 
-			if( cmd & 1 )
+				*(retbuffptr++) = r;
+			}
+			break;
+		}
+		case 0x94:
+		{
+			if( remain >= 3 )
 			{
-				if( remain >= 4 )
+				int addytorx = *(iptr++);
+				addytorx |= (*(iptr++))<<8;
+				int bytestorx = *(iptr++);
+
+				if( (sizeof(retbuff)-(retbuffptr - retbuff)) >= bytestorx + 1 )
 				{
-					SendWord32( t1coeff, pinmask, cmd>>1, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
-					iptr += 4;
+					retbuffptr[0] = UPDIReadMemoryArea( pinmask, updi_clocks_per_bit, addytorx, (uint8_t*)&retbuffptr[1], bytestorx );
+					retbuffptr += bytestorx + 1;
 				}
 			}
-			else
-			{
-				if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 4 )
-				{
-					int r = ReadWord32( t1coeff, pinmask, cmd>>1, (uint32_t*)&retbuffptr[1] );
-					retbuffptr[0] = r;
-					if( r < 0 )
-						*((uint32_t*)&retbuffptr[1]) = 0;
-					retbuffptr += 5;
-				}
-			}
+			break;
+		}
+		case 0x95:
+		{
+			*(retbuffptr++) = UPDIErase( pinmask, updi_clocks_per_bit );
+			break;
+		}
 		}
 	}
-#endif
 
 	return 0;
 }
