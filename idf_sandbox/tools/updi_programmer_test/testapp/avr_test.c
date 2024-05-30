@@ -7,6 +7,9 @@
 
 int main()
 {
+	// Configure / enable 32.768k crystal
+	
+
     PORTC.DIRSET = 1;
     PORTA.DIRSET = 1<<4;
 	while(1)
