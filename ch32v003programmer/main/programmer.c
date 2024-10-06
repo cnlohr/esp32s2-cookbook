@@ -157,6 +157,16 @@ void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32
 	}
 }
 
+
+void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
+{
+	programmer_mode = *(*liptr++);
+	// Unknown Programmer
+	*(*lretbuffptr++) = 0;
+	*(*lretbuffptr++) = programmer_mode;
+	uprintf( "Changing programming mode to %d\n", programmer_mode );
+}
+
 int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 {
 	if( is_get )
@@ -181,15 +191,9 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 		// Make sure there is plenty of space.
 		if( (sizeof(retbuff)-(retbuffptr - retbuff)) < 6 ) break;
 
-		if( cmd == 0xfd ) // Code 0xFD = Switch Mode
-		{
-			programmer_mode = *(iptr++);
-			// Unknown Programmer
-			*(retbuffptr++) = 0;
-			*(retbuffptr++) = programmer_mode;
+		uprintf( "CMD: %02x\n", cmd );
 
-		}
-		else if( programmer_mode == 0 )
+		if( programmer_mode == 0 )
 		{
 			if( cmd == 0xfe ) // We will never write to 0x7f.
 			{
@@ -197,6 +201,9 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 
 				switch( cmd )
 				{
+				case 0xfd:
+					SwitchMode( &iptr, &retbuffptr );
+					break;
 				case 0x01:
 					DoSongAndDanceToEnterPgmMode( &state );
 					break;
@@ -370,6 +377,15 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 
 			switch( cmd )
 			{
+			case 0xfe:
+			{
+				cmd = *(iptr++);
+				if( cmd == 0xfd )
+				{
+					SwitchMode( &iptr, &retbuffptr );
+				}
+				break;
+			}
 			case 0x90:
 			{
 				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.

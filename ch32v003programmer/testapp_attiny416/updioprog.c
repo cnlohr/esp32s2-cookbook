@@ -62,6 +62,7 @@ reinit:
 	memset( rdata, 0xff, sizeof( rdata ) );
 	rdataptr = rdata;
 	*(rdataptr++) = 0xad; // Report ID.
+	*(rdataptr++) = 0xfe;
 	*(rdataptr++) = 0xfd;
 	*(rdataptr++) = 1; // UPDI mode
 	r = hid_send_feature_report( hd, rdata, trysend );
