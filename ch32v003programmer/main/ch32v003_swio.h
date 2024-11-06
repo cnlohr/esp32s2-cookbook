@@ -11,6 +11,10 @@
 // This is the weird song-and-dance that the WCH LinkE does when
 // connecting to a CH32V003 part with unknown state.  This is probably
 // incorrect, but isn't really needed unless things get really cursed.
+//
+// SWD Code based on:
+//   https://github.com/fxsheep/openocd_wchlink-rv/wiki/WCH-RVSWD-protocol
+//   https://github.com/perigoso/sigrok-rvswd
 
 #ifndef _CH32V003_SWIO_H
 #define _CH32V003_SWIO_H
@@ -27,7 +31,9 @@ struct SWIOState
 {
 	// Set these before calling any functions
 	int t1coeff;
-	int pinmask;
+	int pinmaskD;
+	int pinmaskC;
+	int opmode; // 0 for SWIO, 1 for SWD
 
 	// Zero the rest of the structure.
 	uint32_t statetag;
@@ -41,11 +47,21 @@ struct SWIOState
 
 #define IRAM IRAM_ATTR
 
-static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state );
+// You may need to rewrite:
+static inline void Send1BitSWIO( int t1coeff, int pinmaskD ) IRAM;
+static inline void Send0BitSWIO( int t1coeff, int pinmaskD ) IRAM;
+static inline int ReadBitSWIO( struct SWIOState * state ) IRAM;
+static inline void Send1BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
+static inline void Send0BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
+static inline int ReadBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
+
+
+// Provided Basic functions
 static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t value ) IRAM;
 static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value ) IRAM;
 
 // More advanced functions built on lower level PHY.
+static int InitializeSWDSWIO( struct SWIOState * state );
 static int ReadWord( struct SWIOState * state, uint32_t word, uint32_t * ret );
 static int WriteWord( struct SWIOState * state, uint32_t word, uint32_t val );
 static int WaitForFlash( struct SWIOState * state );
@@ -87,9 +103,6 @@ static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, u
 #define CR_PAGE_ER                 ((uint32_t)0x00020000)
 #define CR_BUF_RST                 ((uint32_t)0x00080000)
 
-static inline void Send1Bit( int t1coeff, int pinmask ) IRAM;
-static inline void Send0Bit( int t1coeff, int pinmask ) IRAM;
-static inline int ReadBit( struct SWIOState * state ) IRAM;
 
 static inline void PrecDelay( int delay )
 {
@@ -105,35 +118,35 @@ static inline void PrecDelay( int delay )
 // 	GPIO.out_w1ts = pinmask;
 //	GPIO.enable_w1ts = pinmask;
 // when they are called.
-static inline void Send1Bit( int t1coeff, int pinmask )
+static inline void Send1BitSWIO( int t1coeff, int pinmaskD )
 {
 	// Low for a nominal period of time.
 	// High for a nominal period of time.
 
-	GPIO.out_w1tc = pinmask;
+	GPIO.out_w1tc = pinmaskD;
 	PrecDelay( t1coeff );
-	GPIO.out_w1ts = pinmask;
+	GPIO.out_w1ts = pinmaskD;
 	PrecDelay( t1coeff );
 }
 
-static inline void Send0Bit( int t1coeff, int pinmask )
+static inline void Send0BitSWIO( int t1coeff, int pinmaskD )
 {
 	// Low for a LONG period of time.
 	// High for a nominal period of time.
 	int longwait = t1coeff*4;
-	GPIO.out_w1tc = pinmask;
+	GPIO.out_w1tc = pinmaskD;
 	PrecDelay( longwait );
-	GPIO.out_w1ts = pinmask;
+	GPIO.out_w1ts = pinmaskD;
 	PrecDelay( t1coeff );
 }
 
 // returns 0 if 0
 // returns 1 if 1
 // returns 2 if timeout.
-static inline int ReadBit( struct SWIOState * state )
+static inline int ReadBitSWIO( struct SWIOState * state )
 {
 	int t1coeff = state->t1coeff;
-	int pinmask = state->pinmask;
+	int pinmaskD = state->pinmaskD;
 
 	// Drive low, very briefly.  Let drift high.
 	// See if CH32V003 is holding low.
@@ -141,15 +154,15 @@ static inline int ReadBit( struct SWIOState * state )
 	int timeout = 0;
 	int ret = 0;
 	int medwait = t1coeff * 2;
-	GPIO.out_w1tc = pinmask;
+	GPIO.out_w1tc = pinmaskD;
 	PrecDelay( t1coeff );
-	GPIO.enable_w1tc = pinmask;
-	GPIO.out_w1ts = pinmask;
+	GPIO.enable_w1tc = pinmaskD;
+	GPIO.out_w1ts = pinmaskD;
 #ifdef R_GLITCH_HIGH
 	int halfwait = t1coeff / 2;
 	PrecDelay( halfwait );
-	GPIO.enable_w1ts = pinmask;
-	GPIO.enable_w1tc = pinmask;
+	GPIO.enable_w1ts = pinmaskD;
+	GPIO.enable_w1tc = pinmaskD;
 	PrecDelay( halfwait );
 #else
 	PrecDelay( medwait );
@@ -157,182 +170,309 @@ static inline int ReadBit( struct SWIOState * state )
 	ret = GPIO.in;
 
 #ifdef R_GLITCH_HIGH
-	if( !(ret & pinmask) )
+	if( !(ret & pinmaskD) )
 	{
 		// Wait if still low.
 		PrecDelay( medwait );
-		GPIO.enable_w1ts = pinmask;
-		GPIO.enable_w1tc = pinmask;
+		GPIO.enable_w1ts = pinmaskD;
+		GPIO.enable_w1tc = pinmaskD;
 	}
 #endif
 	for( timeout = 0; timeout < MAX_IN_TIMEOUT; timeout++ )
 	{
-		if( GPIO.in & pinmask )
+		if( GPIO.in & pinmaskD )
 		{
-			GPIO.enable_w1ts = pinmask;
+			GPIO.enable_w1ts = pinmaskD;
 			int fastwait = t1coeff / 2;
 			PrecDelay( fastwait );
-			return !!(ret & pinmask);
+			return !!(ret & pinmaskD);
 		}
 	}
 	
 	// Force high anyway so, though hazarded, we can still move along.
-	GPIO.enable_w1ts = pinmask;
+	GPIO.enable_w1ts = pinmaskD;
 	return 2;
 }
+
+
+static inline void Send1BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
+{
+	// Assume:
+	// SWD is in indeterminte state.
+	// SWC is HIGH
+	GPIO.out_w1tc = pinmaskC;
+	PrecDelay( t1coeff*2 );
+	GPIO.out_w1ts = pinmaskD;
+	GPIO.enable_w1ts = pinmaskD;
+	PrecDelay( t1coeff*2 );
+	GPIO.out_w1ts = pinmaskC;
+	PrecDelay( t1coeff*2 );
+}
+
+static inline void Send0BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
+{
+	// Assume:
+	// SWD is in indeterminte state.
+	// SWC is HIGH
+	GPIO.out_w1tc = pinmaskC;
+	PrecDelay( t1coeff*2 );
+	GPIO.out_w1tc = pinmaskD;
+	GPIO.enable_w1ts = pinmaskD;
+	PrecDelay( t1coeff*2 );
+	GPIO.out_w1ts = pinmaskC;
+	PrecDelay( t1coeff*2 );
+}
+
+static inline int ReadBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
+{
+	GPIO.enable_w1tc = pinmaskD;
+	GPIO.out_w1tc = pinmaskC;
+	PrecDelay( t1coeff*2 );
+	GPIO.out_w1ts = pinmaskD;
+	PrecDelay( t1coeff*2 );
+	int r = GPIO.in & pinmaskD; 
+	GPIO.out_w1ts = pinmaskC;
+	PrecDelay( t1coeff*2 );
+	return r;
+}
+
 
 static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t value )
 {
 	int t1coeff = state->t1coeff;
-	int pinmask = state->pinmask;
-
- 	GPIO.out_w1ts = pinmask;
-	GPIO.enable_w1ts = pinmask;
-
-	DisableISR();
-	Send1Bit( t1coeff, pinmask );
-	uint32_t mask;
-	for( mask = 1<<6; mask; mask >>= 1 )
+	int pinmaskD = state->pinmaskD;
+	int pinmaskC = state->pinmaskC;
+ 	GPIO.out_w1ts = pinmaskC;
+	GPIO.enable_w1ts = pinmaskC;
+ 	GPIO.out_w1ts = pinmaskD;
+	GPIO.enable_w1ts = pinmaskD;
+	if( state->opmode == 0 )
 	{
-		if( command & mask )
-			Send1Bit(t1coeff, pinmask);
-		else
-			Send0Bit(t1coeff, pinmask);
+		DisableISR();
+		Send1BitSWIO( t1coeff, pinmaskD );
+		uint32_t mask;
+		for( mask = 1<<6; mask; mask >>= 1 )
+		{
+			if( command & mask )
+				Send1BitSWIO( t1coeff, pinmaskD );
+			else
+				Send0BitSWIO( t1coeff, pinmaskD );
+		}
+		Send1BitSWIO( t1coeff, pinmaskD );
+		for( mask = 1<<31; mask; mask >>= 1 )
+		{
+			if( value & mask )
+				Send1BitSWIO( t1coeff, pinmaskD );
+			else
+				Send0BitSWIO( t1coeff, pinmaskD );
+		}
+		EnableISR();
+		esp_rom_delay_us(8); // Sometimes 2 is too short.
 	}
-	Send1Bit( t1coeff, pinmask );
-	for( mask = 1<<31; mask; mask >>= 1 )
+	else
 	{
-		if( value & mask )
-			Send1Bit(t1coeff, pinmask);
+		uint32_t mask;
+uprintf( "CO: %08x %08x %d %d\n", pinmaskD, pinmaskC, t1coeff, state->opmode );
+		DisableISR();
+	 	GPIO.out_w1tc = pinmaskD;
+		PrecDelay( t1coeff );
+	 	GPIO.out_w1ts = pinmaskC;
+		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		int parity = 1;
+		for( mask = 1<<6; mask; mask >>= 1 )
+		{
+			if( command & mask )
+			{
+				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+				parity = !parity;
+			}
+			else
+				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		}
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC ); // Write = Set high
+
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		parity = 0;
+		for( mask = 1<<31; mask; mask >>= 1 )
+		{
+			if( value & mask )
+			{
+				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+				parity = !parity;
+			}
+			else
+				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		}
+		if( parity )
+			Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
 		else
-			Send0Bit(t1coeff, pinmask);
+			Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		GPIO.out_w1tc = pinmaskC;
+		PrecDelay( t1coeff );
+		GPIO.out_w1tc = pinmaskD;
+		GPIO.enable_w1ts = pinmaskD;
+		PrecDelay( t1coeff );
+		GPIO.out_w1ts = pinmaskC;
+		PrecDelay( t1coeff );
+		GPIO.out_w1ts = pinmaskD;
+
+		EnableISR();
+		esp_rom_delay_us(8); // Sometimes 2 is too short.
 	}
-	EnableISR();
-	esp_rom_delay_us(8); // Sometimes 2 is too short.
 }
 
 // returns 0 if no error, otherwise error.
 static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * value )
 {
 	int t1coeff = state->t1coeff;
-	int pinmask = state->pinmask;
+	int pinmaskD = state->pinmaskD;
+	int pinmaskC = state->pinmaskC;
+ 	GPIO.out_w1ts = pinmaskC;
+	GPIO.enable_w1ts = pinmaskC;
+ 	GPIO.out_w1ts = pinmaskD;
+	GPIO.enable_w1ts = pinmaskD;
 
- 	GPIO.out_w1ts = pinmask;
-	GPIO.enable_w1ts = pinmask;
-
-	DisableISR();
-	Send1Bit( t1coeff, pinmask );
-	int i;
-	uint32_t mask;
-	for( mask = 1<<6; mask; mask >>= 1 )
+	if( state->opmode == 0 )
 	{
-		if( command & mask )
-			Send1Bit(t1coeff, pinmask);
-		else
-			Send0Bit(t1coeff, pinmask);
-	}
-	Send0Bit( t1coeff, pinmask );
-	uint32_t rval = 0;
-	for( i = 0; i < 32; i++ )
-	{
-		rval <<= 1;
-		int r = ReadBit( state );
-		if( r == 1 )
-			rval |= 1;
-		if( r == 2 )
+		DisableISR();
+		Send1BitSWIO( t1coeff, pinmaskD );
+		int i;
+		uint32_t mask;
+		for( mask = 1<<6; mask; mask >>= 1 )
 		{
-			EnableISR();
-			return -1;
+			if( command & mask )
+				Send1BitSWIO(t1coeff, pinmaskD);
+			else
+				Send0BitSWIO(t1coeff, pinmaskD);
 		}
+		Send0BitSWIO( t1coeff, pinmaskD );
+		uint32_t rval = 0;
+		for( i = 0; i < 32; i++ )
+		{
+			rval <<= 1;
+			int r = ReadBitSWIO( state );
+			if( r == 1 )
+				rval |= 1;
+			if( r == 2 )
+			{
+				EnableISR();
+				return -1;
+			}
+		}
+		*value = rval;
+		EnableISR();
+		esp_rom_delay_us(8); // Sometimes 2 is too short.
 	}
-	*value = rval;
-	EnableISR();
-	esp_rom_delay_us(8); // Sometimes 2 is too short.
+	else
+	{
+		int mask;
+		DisableISR();
+	 	GPIO.out_w1tc = pinmaskD;
+		PrecDelay( t1coeff );
+	 	GPIO.out_w1ts = pinmaskC;
+		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		int parity = 1;
+		for( mask = 1<<6; mask; mask >>= 1 )
+		{
+			if( command & mask )
+			{
+				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+				parity = !parity;
+			}
+			else
+				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		}
+		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC ); // Read = Low
+
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		uint32_t rval = 0;
+		int i;
+		for( i = 0; i < 32; i++ )
+		{
+			rval <<= 1;
+			int r = ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+			if( r == 1 )
+				rval |= 1;
+			if( r == 2 )
+			{
+				EnableISR();
+				return -1;
+			}
+		}
+		*value = rval;
+
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		GPIO.out_w1tc = pinmaskC;
+		PrecDelay( t1coeff );
+		GPIO.out_w1tc = pinmaskD;
+		GPIO.enable_w1ts = pinmaskD;
+		PrecDelay( t1coeff );
+		GPIO.out_w1ts = pinmaskC;
+		PrecDelay( t1coeff );
+		GPIO.out_w1ts = pinmaskD;
+
+		EnableISR();
+		esp_rom_delay_us(8); // Sometimes 2 is too short.
+	}
 	return 0;
 }
 
-static inline void ExecuteTimePairs( struct SWIOState * state, const uint16_t * pairs, int numpairs, int iterations )
-{
-	int t1coeff = state->t1coeff;
-	int pinmask = state->pinmask;
 
-	int j, k;
-	for( k = 0; k < iterations; k++ )
+static int InitializeSWDSWIO( struct SWIOState * state )
+{
+	state->opmode = 0; // Try SWIO first
+	// First try to see if there is an 003.
+	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
+	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
+	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Try twice just in case
+	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) );
+
+	// See if we can see a chip here...
+	uint32_t value;
+	if( MCFReadReg32( state, DMCFGR, &value ) == 0 && value == ( 0x5aa50000 | (1<<10) ) )
 	{
-		const uint16_t * tp = pairs;
-		for( j = 0; j < numpairs; j++ )
-		{
-			int t1v = t1coeff * (*(tp++))-1;
-			GPIO.out_w1tc = pinmask;
-			PrecDelay( t1v );
-			GPIO.out_w1ts = pinmask;
-			t1v = t1coeff * (*(tp++))-1;
-			PrecDelay( t1v );
-		}
+		uprintf( "TEST: Read reg passed. Check value: %08x TODO: MAKE SURE THESE MATCH\n", value );
+		return 0;
 	}
-}
 
-// Returns 0 if chips is present
-// Returns 1 if chip is not present
-// Returns 2 if there was a bus fault.
-static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state )
-{
-	int pinmask = state->pinmask;
-	// XXX MOSTLY UNTESTED!!!!
+	//Otherwise Maybe it's SWD?
+	state->opmode = 1;
+	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
+	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
+	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Try twice just in case
+	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) );
 
-	static const uint16_t timepairs1[] ={
-		32, 12, //  8.2us / 3.1us
-		36, 12, //  9.2us / 3.1us
-		392, 366 // 102.3us / 95.3us
-	};
+	// See if we can see a chip here...
+	uprintf( "Read Reg: %d\n", MCFReadReg32( state, DMCFGR, &value ) );
+	uprintf( "VALUE: %08x\n", value );
 
-	// Repeat for 199x
-	static const uint16_t timepairs2[] ={
-		15, 12, //  4.1us / 3.1us
-		32, 12, //  8.2us / 3.1us
-		36, 12, //  9.3us / 3.1us
-		392, 366 // 102.3us / 95.3us
-	};
-
-	// Repeat for 10x
-	static const uint16_t timepairs3[] ={
-		15, 807, //  4.1us / 210us
-		24, 8,   //  6.3us / 2us
-		32, 8,   //  8.4us / 2us
-		24, 10,  //  6.2us / 2.4us
-		20, 8,   //  5.2us / 2.1us
-		239, 8,  //  62.3us / 2.1us
-		32, 20,  //  8.4us / 5.3us
-		8, 32,   //  2.2us / 8.4us
-		24, 8,   //  6.3us / 2.1us
-		32, 8,   //  8.4us / 2.1us
-		26, 7,   //  6.9us / 1.7us
-		20, 8,   //  5.2us / 2.1us
-		239, 8,  //  62.3us / 2.1us
-		32, 20,  //  8.4us / 5.3us
-		8, 22,   //  2us / 5.3us
-		24, 8,   //  6.3us 2.1us
-		24, 8,   //  6.3us 2.1us
-		31, 6,   //  8us / 1.6us
-		25, 307, // 6.6us / 80us
-	};
-
-	DisableISR();
-
-	ExecuteTimePairs( state, timepairs1, 3, 1 );
-	ExecuteTimePairs( state, timepairs2, 4, 199 );
-	ExecuteTimePairs( state, timepairs3, 19, 10 );
-
-	// THIS IS WRONG!!!! THIS IS NOT A PRESENT BIT. 
-	int present = ReadBit( state ); // Actually here t1coeff, for this should be *= 8!
-	GPIO.enable_w1ts = pinmask;
-	GPIO.out_w1tc = pinmask;
-	esp_rom_delay_us( 2000 );
-	GPIO.out_w1ts = pinmask;
-	EnableISR();
-	esp_rom_delay_us( 1 );
-
-	return present;
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -352,7 +492,6 @@ static int WaitForFlash( struct SWIOState * iss )
 
 	if( rw & FLASH_STATR_WRPRTERR )
 		return -44;
-
 
 	if( rw & 1 )
 		return -5;
