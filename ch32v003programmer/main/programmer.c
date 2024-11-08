@@ -196,7 +196,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 		// Make sure there is plenty of space.
 		if( (sizeof(retbuff)-(retbuffptr - retbuff)) < 6 ) break;
 
-		uprintf( "CMD: %02x\n", cmd );
+		//uprintf( "CMD: %02x\n", cmd );
 
 		if( programmer_mode == 0 )
 		{
@@ -212,6 +212,10 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				case 0x01:
 					//DoSongAndDanceToEnterPgmMode( &state );
 					// This was determind not to be needed.
+					REG_WRITE( IO_MUX_REG(SWCLK_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWCLK.
+					REG_WRITE( IO_MUX_REG(SWCLK_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+					REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
+					REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
 					InitializeSWDSWIO( &state );
 					break;
 				case 0x02: // Power-down 
@@ -231,7 +235,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					GPIO.enable_w1ts = state.pinmaskD;
 					GPIO.enable_w1ts = state.pinmaskC;
 					GPIO.out_w1ts = state.pinmaskD;
-					gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+					//gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 					break;
 				case 0x04: // Delay( uint16_t us )
 					esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
