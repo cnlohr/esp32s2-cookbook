@@ -51,8 +51,7 @@ struct SWIOState
 static inline void Send1BitSWIO( int t1coeff, int pinmaskD ) IRAM;
 static inline void Send0BitSWIO( int t1coeff, int pinmaskD ) IRAM;
 static inline int ReadBitSWIO( struct SWIOState * state ) IRAM;
-static inline void Send1BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
-static inline void Send0BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
+static inline void SendBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC, int val ) IRAM;
 static inline int ReadBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC ) IRAM;
 
 
@@ -195,44 +194,31 @@ static inline int ReadBitSWIO( struct SWIOState * state )
 }
 
 
-static inline void Send1BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
+static inline void SendBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC, int val )
 {
 	// Assume:
 	// SWD is in indeterminte state.
 	// SWC is HIGH
 	GPIO.out_w1tc = pinmaskC;
-	PrecDelay( t1coeff*2 );
-	GPIO.out_w1ts = pinmaskD;
+	if( val )
+		GPIO.out_w1ts = pinmaskD;
+	else
+		GPIO.out_w1tc = pinmaskD;
 	GPIO.enable_w1ts = pinmaskD;
-	PrecDelay( t1coeff*2 );
+	PrecDelay( t1coeff );
 	GPIO.out_w1ts = pinmaskC;
-	PrecDelay( t1coeff*2 );
-}
-
-static inline void Send0BitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
-{
-	// Assume:
-	// SWD is in indeterminte state.
-	// SWC is HIGH
-	GPIO.out_w1tc = pinmaskC;
-	PrecDelay( t1coeff*2 );
-	GPIO.out_w1tc = pinmaskD;
-	GPIO.enable_w1ts = pinmaskD;
-	PrecDelay( t1coeff*2 );
-	GPIO.out_w1ts = pinmaskC;
-	PrecDelay( t1coeff*2 );
+	PrecDelay( t1coeff );
 }
 
 static inline int ReadBitRVSWD( int t1coeff, int pinmaskD, int pinmaskC )
 {
 	GPIO.enable_w1tc = pinmaskD;
 	GPIO.out_w1tc = pinmaskC;
-	PrecDelay( t1coeff*2 );
 	GPIO.out_w1ts = pinmaskD;
-	PrecDelay( t1coeff*2 );
-	int r = GPIO.in & pinmaskD; 
+	PrecDelay( t1coeff );
+	int r = !!(GPIO.in & pinmaskD);
 	GPIO.out_w1ts = pinmaskC;
-	PrecDelay( t1coeff*2 );
+	PrecDelay( t1coeff );
 	return r;
 }
 
@@ -246,6 +232,7 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 	GPIO.enable_w1ts = pinmaskC;
  	GPIO.out_w1ts = pinmaskD;
 	GPIO.enable_w1ts = pinmaskD;
+	//uprintf( "CO: (%08x=>%08x) %08x %08x %d %d\n", command, value, pinmaskD, pinmaskC, t1coeff, state->opmode );
 	if( state->opmode == 0 )
 	{
 		DisableISR();
@@ -272,54 +259,47 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 	else
 	{
 		uint32_t mask;
-uprintf( "CO: %08x %08x %d %d\n", pinmaskD, pinmaskC, t1coeff, state->opmode );
 		DisableISR();
 	 	GPIO.out_w1tc = pinmaskD;
 		PrecDelay( t1coeff );
-	 	GPIO.out_w1ts = pinmaskC;
-		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
 		int parity = 1;
 		for( mask = 1<<6; mask; mask >>= 1 )
 		{
-			if( command & mask )
-			{
-				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-				parity = !parity;
-			}
-			else
-				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+			int v = !!(command & mask);
+			parity ^= v;
+			SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, v );
 		}
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC ); // Write = Set high
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Write = Set high
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Seems only need to be set for first transaction (We are ignoring that though)
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ??? --> No effect at all????
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // 0 for register, 1 for value.
+//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ???  Seems to have something to do with halting.
 
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 
 		parity = 0;
 		for( mask = 1<<31; mask; mask >>= 1 )
 		{
-			if( value & mask )
-			{
-				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-				parity = !parity;
-			}
-			else
-				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+			int v = !!(value & mask);
+			parity ^= v;
+			SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, v );
 		}
-		if( parity )
-			Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		else
-			Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Seems only to be set for first transaction. (We don't care, and are overriding)
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
 		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // 0 for register, 1 for value
+//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
 
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
 
 		GPIO.out_w1tc = pinmaskC;
 		PrecDelay( t1coeff );
@@ -383,36 +363,39 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 		DisableISR();
 	 	GPIO.out_w1tc = pinmaskD;
 		PrecDelay( t1coeff );
-	 	GPIO.out_w1ts = pinmaskC;
-		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		int parity = 1;
+		int parity = 0;
 		for( mask = 1<<6; mask; mask >>= 1 )
 		{
-			if( command & mask )
-			{
-				Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-				parity = !parity;
-			}
-			else
-				Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+			int v = !!(command & mask);
+			parity ^= v;
+			SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, v );
 		}
-		Send0BitRVSWD( t1coeff, pinmaskD, pinmaskC ); // Read = Low
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // Read = Set low
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // True only for first packet
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???  (No effect at all?)
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // 0 for register, 1 for value
+//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
+
 
 		uint32_t rval = 0;
 		int i;
+		parity = 0;
 		for( i = 0; i < 32; i++ )
 		{
 			rval <<= 1;
 			int r = ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 			if( r == 1 )
+			{
 				rval |= 1;
+				parity ^= 1;
+			}
 			if( r == 2 )
 			{
 				EnableISR();
@@ -421,12 +404,24 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 		}
 		*value = rval;
 
+		if( ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ) != parity )
+		{
+			uprintf( "PARITY FAILED\n" );
+			EnableISR();
+			return -1;
+		}
+
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // True only for first packet (but we don't care)
+//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ??? (No effect at all?)
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
 
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		Send1BitRVSWD( t1coeff, pinmaskD, pinmaskC );
+
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // 1 for data
+//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
 
 		GPIO.out_w1tc = pinmaskC;
 		PrecDelay( t1coeff );
@@ -453,24 +448,50 @@ static int InitializeSWDSWIO( struct SWIOState * state )
 	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Try twice just in case
 	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) );
 
+	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
+	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
+
 	// See if we can see a chip here...
 	uint32_t value;
-	if( MCFReadReg32( state, DMCFGR, &value ) == 0 && value == ( 0x5aa50000 | (1<<10) ) )
+	int readdm = MCFReadReg32( state, DMCFGR, &value );
+	uprintf( "DMCFGR (SWD): %d: %08x\n", readdm, value );
+	if( readdm == 0 && ( value & 0xffff0000 ) == ( 0x5aa50000 ) )
 	{
 		uprintf( "TEST: Read reg passed. Check value: %08x TODO: MAKE SURE THESE MATCH\n", value );
 		return 0;
 	}
 
+	GPIO.out_w1ts = state->pinmaskC;
+	GPIO.enable_w1ts = state->pinmaskC;
+
 	//Otherwise Maybe it's SWD?
 	state->opmode = 1;
-	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
-	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
-	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Try twice just in case
-	MCFWriteReg32( state, DMCFGR, 0x5aa50000 | (1<<10) );
+
+	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
+	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
+
+	uint32_t dmstatus, dmcontrol;
+	if( MCFReadReg32( state, DMSTATUS, &dmstatus ) != 0 || 
+		MCFReadReg32( state, DMCONTROL, &dmcontrol ) != 0 )
+	{
+		uprintf( "Could not read from RVSWD connection\n" );
+		return -1;
+	}
 
 	// See if we can see a chip here...
-	uprintf( "Read Reg: %d\n", MCFReadReg32( state, DMCFGR, &value ) );
-	uprintf( "VALUE: %08x\n", value );
+	uprintf( "DMSTATUS: %08x\n", dmstatus );
+	uprintf( "DMCONTROL: %08x\n", dmcontrol );
+
+	if( ( ( ( dmstatus >> 8 ) & 0xf ) != 0x0c &&
+		( ( dmstatus >> 8 ) & 0xf ) != 0x03 ) ||
+		dmcontrol != 1 )
+	{
+		uprintf( "DMSTATUS invalid (Probably no RVSWD chip)\n" );
+		return -1;
+	}
+
+	MCFWriteReg32( state, DMABSTRACTCS, 0x08000302 ); // Clear out abstractcs register.
+	uprintf( "Found RVSWD interface\n" );
 
 	return 0;
 }
