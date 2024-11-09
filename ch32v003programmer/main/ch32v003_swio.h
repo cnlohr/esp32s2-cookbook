@@ -27,6 +27,18 @@
 
 // You should interface to this file via these functions
 
+enum RiscVChip {
+	CHIP_UNKNOWN = 0x00,
+	CHIP_CH32V10x = 0x01,
+	CHIP_CH57x = 0x02,
+	CHIP_CH56x = 0x03,
+	CHIP_CH32V20x = 0x05,
+	CHIP_CH32V30x = 0x06,
+	CHIP_CH58x = 0x07,
+	CHIP_CH32V003 = 0x09,
+	CHIP_CH32X03x = 0x0d,
+};
+
 struct SWIOState
 {
 	// Set these before calling any functions
@@ -34,6 +46,8 @@ struct SWIOState
 	int pinmaskD;
 	int pinmaskC;
 	int opmode; // 0 for SWIO, 1 for SWD
+	enum RiscVChip target_chip_type;
+	int sectorsize;
 
 	// Zero the rest of the structure.
 	uint32_t statetag;
@@ -47,7 +61,7 @@ struct SWIOState
 
 #define IRAM IRAM_ATTR
 
-// You may need to rewrite:
+// You may need to rewrite, depending on your architecture.
 static inline void Send1BitSWIO( int t1coeff, int pinmaskD ) IRAM;
 static inline void Send0BitSWIO( int t1coeff, int pinmaskD ) IRAM;
 static inline int ReadBitSWIO( struct SWIOState * state ) IRAM;
@@ -271,14 +285,10 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 		}
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Write = Set high
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Seems only need to be set for first transaction (We are ignoring that though)
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ??? --> No effect at all????
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // Seems only need to be set for first transaction (We are ignoring that though)
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // 0 for register, 1 for value.
-//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ???  Seems to have something to do with halting.
 
 
@@ -290,14 +300,10 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 			SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, v );
 		}
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // Seems only to be set for first transaction. (We don't care, and are overriding)
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // 0 for register, 1 for value
-//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
 
 
@@ -372,15 +378,10 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 		}
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // Read = Set low
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, parity );
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // True only for first packet
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???  (No effect at all?)
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // 0 for register, 1 for value
-//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
 
 
@@ -411,16 +412,10 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 			return -1;
 		}
 
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ???
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // True only for first packet (but we don't care)
-//		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // ??? (No effect at all?)
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC );
-
-
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
+		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 1 ); // 1 for data
-//		ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ); // ???
 		SendBitRVSWD( t1coeff, pinmaskD, pinmaskC, 0 ); // ??? Seems to have something to do with halting?
 
 		GPIO.out_w1tc = pinmaskC;
@@ -438,9 +433,14 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 	return 0;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// High level functions
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int InitializeSWDSWIO( struct SWIOState * state )
 {
+	// Careful - don't halt the part, we might just want to attach for a debug printf or something.
+
 	state->opmode = 0; // Try SWIO first
 	// First try to see if there is an 003.
 	MCFWriteReg32( state, DMSHDWCFGR, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
@@ -496,12 +496,99 @@ static int InitializeSWDSWIO( struct SWIOState * state )
 	return 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Higher level functions
+static int DetermineChipTypeAndSectorInfo( struct SWIOState * iss )
+{
+	if( iss->target_chip_type == CHIP_UNKNOWN )
+	{
+		uint32_t rr;
+		if( MCFReadReg32( iss, DMHARTINFO, &rr ) )
+		{
+			fprintf( stderr, "Error: Could not get hart info.\n" );
+			return -1;
+		}
+
+		uint32_t data0offset = 0xe0000000 | ( rr & 0x7ff );
+
+		MCFWriteReg32( iss, DMCONTROL, 0x80000001 ); // Make the debug module work properly.
+		MCFWriteReg32( iss, DMCONTROL, 0x80000001 ); // Make the debug module work properly.
+
+		// Tricky, this function needs to clean everything up because it may be used entering debugger.
+		uint32_t old_data0;
+		MCFReadReg32( iss, DMDATA0, &old_data0 );
+		MCFWriteReg32( iss, DMCOMMAND, 0x00221008 );		// Copy data from x8.
+		uint32_t old_x8;
+		MCFReadReg32( iss, DMDATA0, &old_x8 );
+
+		uint32_t vendorid = 0;
+		uint32_t marchid = 0;
+
+		MCFWriteReg32( iss, DMABSTRACTCS, 0x08000700 ); // Clear out any dmabstractcs errors.
+
+		MCFWriteReg32( iss, DMABSTRACTAUTO, 0x00000000 );
+		MCFWriteReg32( iss, DMCOMMAND, 0x00220000 | 0xf12 );
+		MCFWriteReg32( iss, DMCOMMAND, 0x00220000 | 0xf12 );  // Need to double-read, not sure why.
+		MCFReadReg32( iss, DMDATA0, &marchid );
+
+
+		MCFWriteReg32( iss, DMPROGBUF0, 0x90024000 );		// c.ebreak <<== c.lw x8, 0(x8)
+		MCFWriteReg32( iss, DMDATA0, 0x1ffff704 );			// Special chip ID location.
+		MCFWriteReg32( iss, DMCOMMAND, 0x00271008 );		// Copy data to x8, and execute.
+		WaitForDoneOp( iss );
+
+		MCFWriteReg32( iss, DMCOMMAND, 0x00221008 );		// Copy data from x8.
+		MCFReadReg32( iss, DMDATA0, &vendorid );
+
+		// Cleanup
+		MCFWriteReg32( iss, DMDATA0, old_x8 );
+		MCFWriteReg32( iss, DMCOMMAND, 0x00231008 );		// Copy data to x8
+		MCFWriteReg32( iss, DMDATA0, old_data0 );
+
+		if( data0offset == 0xe00000f4 )
+		{
+			// Only known processor with this signature is a CH32V003.
+			iss->target_chip_type = CHIP_CH32V003;
+			iss->sectorsize = 64;
+		}
+		else if( data0offset == 0xe0000380 )
+		{
+			// All other known chips.
+			uint32_t chip_type = (vendorid & 0xfff00000)>>20;
+			switch( chip_type )
+			{
+				case 0x103:
+					iss->target_chip_type = CHIP_CH32V10x;
+					iss->sectorsize = 256; // test me!
+					break;
+				case 0x035: case 0x033:
+					iss->target_chip_type = CHIP_CH32X03x;
+					iss->sectorsize = 256;  // Should be 128, but, doesn't work with 128, only 256
+					break;
+				case 0x203: case 0x205: case 0x208:
+					iss->target_chip_type = CHIP_CH32V20x;
+					iss->sectorsize = 256;
+					break;
+				case 0x303: case 0x305: case 0x307:
+					iss->target_chip_type = CHIP_CH32V30x;
+					iss->sectorsize = 256;
+					break;
+			}
+		}
+		uprintf( "Detected %d / %d\n", iss->target_chip_type, iss->sectorsize );
+		uprintf( "Vendored: %08x\n", vendorid );
+		uprintf( "marchid : %08x\n", marchid );
+		uprintf( "HARTINFO: %08x\n", rr );
+
+		iss->statetag = STTAG( "XXXX" );
+	}
+	return 0;
+}
 
 static int WaitForFlash( struct SWIOState * iss )
 {
 	struct SWIOState * dev = iss;
+
+	if( DetermineChipTypeAndSectorInfo( iss ) ) return -9;
+
 	uint32_t rw, timeout = 0;
 	do
 	{
@@ -519,6 +606,7 @@ static int WaitForFlash( struct SWIOState * iss )
 
 	return 0;
 }
+
 
 static int WaitForDoneOp( struct SWIOState * iss )
 {
@@ -542,13 +630,28 @@ static int WaitForDoneOp( struct SWIOState * iss )
 
 static void StaticUpdatePROGBUFRegs( struct SWIOState * dev )
 {
+	if( DetermineChipTypeAndSectorInfo( dev ) ) return;
+
+	MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
 	MCFWriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
 	MCFWriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
 	MCFWriteReg32( dev, DMDATA0, 0x40022010 ); //FLASH->CTLR
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100c ); // Copy data to x12
-	MCFWriteReg32( dev, DMDATA0, CR_PAGE_PG|CR_BUF_LOAD);
+
+
+	if( dev->target_chip_type == CHIP_CH32V20x || dev->target_chip_type == CHIP_CH32V30x )
+	{
+		// This is not even needed on these chips, but we have to put something here.
+		MCFWriteReg32( dev, DMDATA0, 0x00010000 ); 
+	}
+	else
+	{
+		// v003 requires bufload every word.
+		// x035 requires bufload every word in spite of what the datasheet says.
+		MCFWriteReg32( dev, DMDATA0, 0x00010000|0x00040000); // CR_PAGE_PG = FTPG = 0x00010000 | CR_BUF_LOAD = 0x00040000
+	}
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100d ); // Copy data to x13
 }
 
@@ -573,6 +676,11 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 	{
 		if( iss->statetag != STTAG( "RDSQ" ) || autoincrement != iss->autoincrement )
 		{
+			if( iss->statetag != STTAG( "WRSQ" ) )
+			{
+				StaticUpdatePROGBUFRegs( dev );
+			}
+
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
 
 			// c.lw x8,0(x11) // Pull the address from DATA1
@@ -596,16 +704,12 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 			// c.ebreak
 			MCFWriteReg32( dev, DMPROGBUF2, 0x9002c180 );
 
-			if( iss->statetag != STTAG( "WRSQ" ) )
-			{
-				StaticUpdatePROGBUFRegs( dev );
-			}
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec (not autoincrement)
 			iss->autoincrement = autoincrement;
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_read );
-		MCFWriteReg32( dev, DMCOMMAND, 0x00241000 ); // Only execute.
+		MCFWriteReg32( dev, DMCOMMAND, 0x0024222 ); // Only execute.
 
 		iss->statetag = STTAG( "RDSQ" );
 		iss->currentstateval = address_to_read;
@@ -637,6 +741,11 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 		int did_disable_req = 0;
 		if( iss->statetag != STTAG( "WRSQ" ) )
 		{
+			if( iss->statetag != STTAG( "RDSQ" ) )
+			{
+				StaticUpdatePROGBUFRegs( dev );
+			}
+
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
 			did_disable_req = 1;
 			// Different address, so we don't need to re-write all the program regs.
@@ -646,11 +755,6 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 			// c.addi x9, 4
 			// c.sw x9,0(x11)
 			MCFWriteReg32( dev, DMPROGBUF1, 0xc1840491 );
-
-			if( iss->statetag != STTAG( "RDSQ" ) )
-			{
-				StaticUpdatePROGBUFRegs( dev );
-			}
 		}
 
 		if( iss->lastwriteflags != is_flash || iss->statetag != STTAG( "WRSQ" ) )
@@ -716,6 +820,8 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 static int UnlockFlash( struct SWIOState * iss )
 {
 	struct SWIOState * dev = iss;
+
+	if( DetermineChipTypeAndSectorInfo( iss ) ) return -9;
 
 	uint32_t rw;
 	ReadWord( dev, 0x40022010, &rw );  // FLASH->CTLR = 0x40022010
@@ -795,7 +901,9 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 {
 	struct SWIOState * dev = iss;
 
-	int blob_size = 64;
+	if( DetermineChipTypeAndSectorInfo( iss ) ) return -9;
+
+	const int blob_size = 64;
 	uint32_t wp = address_to_write;
 	uint32_t ew = wp + blob_size;
 	int group = -1;
@@ -834,8 +942,27 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		if( is_flash )
 		{
 			group = (wp & 0xffffffc0);
-			WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010   (PG Performs quick page programming operations.)
-			WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
+
+			int block_in_sector = (group & ( iss->sectorsize - 1 )) / blob_size;
+			int is_first_block = block_in_sector == 0;
+			int is_last_block = block_in_sector == (iss->sectorsize / blob_size - 1 );
+
+			if( is_first_block )
+			{
+				if( dev->target_chip_type != CHIP_CH32V20x && dev->target_chip_type != CHIP_CH32V30x )
+				{
+					// No bufrst on v20x, v30x
+					// V003, x035, maybe more.
+					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
+					WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
+				}
+				else
+				{
+					WaitForFlash( dev );
+					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
+					//FTPG ==  CR_PAGE_PG   == ((uint32_t)0x00010000)
+				}
+			}
 
 			int j;
 			for( j = 0; j < 16; j++ )
@@ -852,9 +979,23 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 				//if( (rw = WaitForFlash( dev ) ) ) return rw;
 				wp += 4;
 			}
-			WriteWord( dev, 0x40022014, group );
-			WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set );  // R32_FLASH_CTLR
-			if( (rw = WaitForFlash( dev ) ) ) return rw;
+
+
+			if( is_last_block )
+			{
+				if( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x )
+				{
+					WriteWord( dev, 0x40022010, 1<<21 ); // Page Start
+				}
+				else
+				{
+					WriteWord( dev, 0x40022014, group );  //0x40022014 -> FLASH->ADDR
+					//if( MCF.PrepForLongOp ) MCF.PrepForLongOp( dev );  // Give the programmer a headsup this next operation could take a while.
+					WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set ); // 0x40022010 -> FLASH->CTLR
+				}
+
+				if( (rw = WaitForFlash( dev ) ) ) return rw;
+			}
 		}
 		else
 		{
