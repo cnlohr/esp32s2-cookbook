@@ -209,15 +209,21 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				case 0xfd:
 					SwitchMode( &iptr, &retbuffptr );
 					break;
+				case 0x0e:
 				case 0x01:
-					//DoSongAndDanceToEnterPgmMode( &state );
+				{
+					//DoSongAndDanceToEnterPgmMode( &state ); was 1.  But really we just want to init.
+					// if we expect this, we can use 0x0e to get status.
 					// This was determind not to be needed.
 					REG_WRITE( IO_MUX_REG(SWCLK_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWCLK.
 					REG_WRITE( IO_MUX_REG(SWCLK_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
 					REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
 					REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
-					InitializeSWDSWIO( &state );
+					int r = InitializeSWDSWIO( &state );
+					if( cmd == 0x0e )
+						*(retbuffptr++) = r;
 					break;
+				}
 				case 0x02: // Power-down 
 					uprintf( "Power down\n" );
 					// Make sure clock is disabled.

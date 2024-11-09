@@ -77,9 +77,9 @@ int main( int argc, char ** argv )
 		}
 
 #ifdef WIN32
-		toprint = r - 4;
-#else
 		toprint = r - 3;
+#else
+		toprint = r - 2;
 #endif
 	} while( 1 );
 
