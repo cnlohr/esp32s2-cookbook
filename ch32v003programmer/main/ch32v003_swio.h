@@ -454,12 +454,11 @@ static int InitializeSWDSWIO( struct SWIOState * state )
 	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
 
 	// See if we can see a chip here...
-	uint32_t value;
+	uint32_t value = 0;
 	int readdm = MCFReadReg32( state, DMCFGR, &value );
-	uprintf( "DMCFGR (SWIO): %d: %08x\n", readdm, value );
 	if( readdm == 0 && ( value & 0xffff0000 ) == ( 0x5aa50000 ) )
 	{
-		uprintf( "TEST: Read reg passed. Check value: %08x TODO: MAKE SURE THESE MATCH DO NOT MERGE UNTIL YOU CHECK, CHARLES\n", value );
+		uprintf( "Found RVSWIO interface.\n" );
 		return 0;
 	}
 
@@ -709,14 +708,14 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 		iss->currentstateval = address_to_read;
 	}
 
-	// Only an issue if we are curising along very fast.
-	WaitForDoneOp( dev );
-
 	if( iss->autoincrement )
 		iss->currentstateval += 4;
 
-	int r = MCFReadReg32( dev, DMDATA0, data );
+	// Only an issue if we are curising along very fast.
+	int r = WaitForDoneOp( dev );
+	if( r ) return r;
 
+	r = MCFReadReg32( dev, DMDATA0, data );
 	return r;
 }
 
@@ -990,7 +989,8 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 
 			if( is_last_block && ( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) )
 			{
-				WriteWord( dev, 0x40022010, 1<<21 ); // Page Start
+				WriteWord( dev, 0x40022010, CR_PAGE_PG | (1<<21) ); // Page Start
+				if( WaitForFlash( dev ) ) return -13;
 			}
 			else if ( iss->target_chip_type == CHIP_CH32V003 || iss->target_chip_type == CHIP_CH32X03x )
 			{
