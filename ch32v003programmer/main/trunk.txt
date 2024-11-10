@@ -1,0 +1,90 @@
+
+static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state );
+// Returns 0 if chips is present
+// Returns 1 if chip is not present
+// Returns 2 if there was a bus fault.
+
+
+
+
+static inline void ExecuteTimePairs( struct SWIOState * state, const uint16_t * pairs, int numpairs, int iterations )
+{
+	int t1coeff = state->t1coeff;
+	int pinmask = state->pinmask;
+
+	int j, k;
+	for( k = 0; k < iterations; k++ )
+	{
+		const uint16_t * tp = pairs;
+		for( j = 0; j < numpairs; j++ )
+		{
+			int t1v = t1coeff * (*(tp++))-1;
+			GPIO.out_w1tc = pinmask;
+			PrecDelay( t1v );
+			GPIO.out_w1ts = pinmask;
+			t1v = t1coeff * (*(tp++))-1;
+			PrecDelay( t1v );
+		}
+	}
+}
+
+
+static int DoSongAndDanceToEnterPgmMode( struct SWIOState * state )
+{
+	int pinmask = state->pinmask;
+	// XXX MOSTLY UNTESTED!!!!
+
+	static const uint16_t timepairs1[] ={
+		32, 12, //  8.2us / 3.1us
+		36, 12, //  9.2us / 3.1us
+		392, 366 // 102.3us / 95.3us
+	};
+
+	// Repeat for 199x
+	static const uint16_t timepairs2[] ={
+		15, 12, //  4.1us / 3.1us
+		32, 12, //  8.2us / 3.1us
+		36, 12, //  9.3us / 3.1us
+		392, 366 // 102.3us / 95.3us
+	};
+
+	// Repeat for 10x
+	static const uint16_t timepairs3[] ={
+		15, 807, //  4.1us / 210us
+		24, 8,   //  6.3us / 2us
+		32, 8,   //  8.4us / 2us
+		24, 10,  //  6.2us / 2.4us
+		20, 8,   //  5.2us / 2.1us
+		239, 8,  //  62.3us / 2.1us
+		32, 20,  //  8.4us / 5.3us
+		8, 32,   //  2.2us / 8.4us
+		24, 8,   //  6.3us / 2.1us
+		32, 8,   //  8.4us / 2.1us
+		26, 7,   //  6.9us / 1.7us
+		20, 8,   //  5.2us / 2.1us
+		239, 8,  //  62.3us / 2.1us
+		32, 20,  //  8.4us / 5.3us
+		8, 22,   //  2us / 5.3us
+		24, 8,   //  6.3us 2.1us
+		24, 8,   //  6.3us 2.1us
+		31, 6,   //  8us / 1.6us
+		25, 307, // 6.6us / 80us
+	};
+
+	DisableISR();
+
+	ExecuteTimePairs( state, timepairs1, 3, 1 );
+	ExecuteTimePairs( state, timepairs2, 4, 199 );
+	ExecuteTimePairs( state, timepairs3, 19, 10 );
+
+	// THIS IS WRONG!!!! THIS IS NOT A PRESENT BIT. 
+	int present = ReadBit( state ); // Actually here t1coeff, for this should be *= 8!
+	GPIO.enable_w1ts = pinmask;
+	GPIO.out_w1tc = pinmask;
+	esp_rom_delay_us( 2000 );
+	GPIO.out_w1ts = pinmask;
+	EnableISR();
+	esp_rom_delay_us( 1 );
+
+	return present;
+}

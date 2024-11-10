@@ -65,24 +65,29 @@ struct SWIOState state;
 void sandbox_main()
 {
 	REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
+	REG_WRITE( IO_MUX_REG(SWCLK_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWCLK.
 	REG_WRITE( IO_MUX_REG(VDD3V3_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
 	REG_WRITE( IO_MUX_REG(VDD5V_EN_PIN), 1<<FUN_IE_S | 1<<FUN_PD_S | 3<<FUN_DRV_S );  //5V for part 40mA drive.
 
 	REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+	REG_WRITE( IO_MUX_REG(SWCLK_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
 	GPIO.out_w1ts = 1<<SWIO_PU_PIN;
 	GPIO.enable_w1ts = 1<<SWIO_PU_PIN;
+	GPIO.out_w1ts = 1<<SWCLK_PU_PIN;
+	GPIO.enable_w1ts = 1<<SWCLK_PU_PIN;
 
 	retbuffptr = retbuff;
 
 
 	memset( &state, 0, sizeof( state ) );
-	state.pinmask = 1<<SWIO_PIN;
+	state.pinmaskD = 1<<SWIO_PIN;
+	state.pinmaskC = 1<<SWCLK_PIN;
 	pinmask = (1<<SWIO_PIN);
 	pinmaskpower = (1<<VDD3V3_EN_PIN) | (1<<VDD5V_EN_PIN);
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
-	GPIO.out_w1ts = state.pinmask;
-	GPIO.enable_w1ts = state.pinmask;
+	GPIO.out_w1ts = state.pinmaskD;
+	GPIO.enable_w1ts = state.pinmaskD;
 
 	esp_rom_delay_us(5000);
 
@@ -191,7 +196,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 		// Make sure there is plenty of space.
 		if( (sizeof(retbuff)-(retbuffptr - retbuff)) < 6 ) break;
 
-		uprintf( "CMD: %02x\n", cmd );
+		//uprintf( "CMD: %02x\n", cmd );
 
 		if( programmer_mode == 0 )
 		{
@@ -204,24 +209,39 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				case 0xfd:
 					SwitchMode( &iptr, &retbuffptr );
 					break;
+				case 0x0e:
 				case 0x01:
-					DoSongAndDanceToEnterPgmMode( &state );
+				{
+					//DoSongAndDanceToEnterPgmMode( &state ); was 1.  But really we just want to init.
+					// if we expect this, we can use 0x0e to get status.
+					// This was determind not to be needed.
+					REG_WRITE( IO_MUX_REG(SWCLK_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWCLK.
+					REG_WRITE( IO_MUX_REG(SWCLK_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+					REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
+					REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
+					int r = InitializeSWDSWIO( &state );
+					if( cmd == 0x0e )
+						*(retbuffptr++) = r;
 					break;
+				}
 				case 0x02: // Power-down 
 					uprintf( "Power down\n" );
 					// Make sure clock is disabled.
 					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
-					GPIO.out_w1tc = state.pinmask;
-					GPIO.enable_w1ts = state.pinmask;
+					GPIO.out_w1tc = state.pinmaskD;
+					GPIO.out_w1tc = state.pinmaskC;
+					GPIO.enable_w1ts = state.pinmaskD;
+					GPIO.enable_w1ts = state.pinmaskC;
 					GPIO.enable_w1tc = pinmaskpower;
 					GPIO.out_w1tc = pinmaskpower;
 					break;
 				case 0x03: // Power-up
 					GPIO.out_w1ts = pinmaskpower;
 					GPIO.enable_w1ts = pinmaskpower;
-					GPIO.enable_w1ts = state.pinmask;
-					GPIO.out_w1ts = state.pinmask;
-					gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+					GPIO.enable_w1ts = state.pinmaskD;
+					GPIO.enable_w1ts = state.pinmaskC;
+					GPIO.out_w1ts = state.pinmaskD;
+					//gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 					break;
 				case 0x04: // Delay( uint16_t us )
 					esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
