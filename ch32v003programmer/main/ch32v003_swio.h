@@ -440,6 +440,8 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 static int InitializeSWDSWIO( struct SWIOState * state )
 {
 	// Careful - don't halt the part, we might just want to attach for a debug printf or something.
+	state->target_chip_type = CHIP_UNKNOWN;
+	state->sectorsize = 64;
 
 	state->opmode = 0; // Try SWIO first
 	// First try to see if there is an 003.
@@ -500,7 +502,7 @@ static int DetermineChipTypeAndSectorInfo( struct SWIOState * iss )
 		uint32_t rr;
 		if( MCFReadReg32( iss, DMHARTINFO, &rr ) )
 		{
-			fprintf( stderr, "Error: Could not get hart info.\n" );
+			uprintf( "Error: Could not get hart info.\n" );
 			return -1;
 		}
 
@@ -590,7 +592,7 @@ static int WaitForFlash( struct SWIOState * iss )
 	{
 		rw = 0;
 		ReadWord( dev, 0x4002200C, &rw ); // FLASH_STATR => 0x4002200C
-	} while( (rw & 1) && timeout++ < 200);  // BSY flag.
+	} while( (rw & 1) && timeout++ < 2000);  // BSY flag.
 
 	WriteWord( dev, 0x4002200C, 0 );
 
@@ -661,6 +663,7 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 {
 	struct SWIOState * dev = iss;
 	int autoincrement = 1;
+
 	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
 		autoincrement = 0;
 
@@ -695,19 +698,19 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 			// c.sw x8, 0(x11) // Write addy to DATA1
 			// c.ebreak
 			MCFWriteReg32( dev, DMPROGBUF2, 0x9002c180 );
-
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec (not autoincrement)
 			iss->autoincrement = autoincrement;
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_read );
-		MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Only execute.
+		MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Execute.
 
 		iss->statetag = STTAG( "RDSQ" );
 		iss->currentstateval = address_to_read;
-
-		WaitForDoneOp( dev );
 	}
+
+	// Only an issue if we are curising along very fast.
+	WaitForDoneOp( dev );
 
 	if( iss->autoincrement )
 		iss->currentstateval += 4;
@@ -734,58 +737,55 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 	{
 		int did_disable_req = 0;
 
-		if( iss->lastwriteflags != is_flash || iss->statetag != STTAG( "WRSQ" ) )
+		if( iss->statetag != STTAG( "WRSQ" ) )
 		{
-			if( iss->statetag != STTAG( "WRSQ" ) )
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
+			did_disable_req = 1;
+
+			if( iss->statetag != STTAG( "RDSQ" ) )
 			{
-				MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
-				did_disable_req = 1;
-
-				if( iss->statetag != STTAG( "RDSQ" ) )
-				{
-					StaticUpdatePROGBUFRegs( dev );
-				}
-
-				// Different address, so we don't need to re-write all the program regs.
-				// c.lw x8,0(x10) // Get the value to write.
-				// c.lw x9,0(x11) // Get the address to write to. 
-				MCFWriteReg32( dev, DMPROGBUF0, 0x41844100 );
-				// c.sw x8,0(x9)  // Write to the address.
-				// c.addi x9, 4
-				MCFWriteReg32( dev, DMPROGBUF1, 0x0491c080 );
-				// c.sw x9,0(x11)
-				// c.nop
-				MCFWriteReg32( dev, DMPROGBUF2, 0x0001c184 );
-				// We don't shorthand the stop here, because if we are flipping beteen flash and
-				// non-flash writes, we don't want to keep messing with these registers.
+				StaticUpdatePROGBUFRegs( dev );
 			}
 
-			if( is_flash )
-			{
-				// A little weird - we need to wait until the buf load is done here to continue.
-				// x12 = 0x40022010 (FLASH_STATR)
-				//
-				// c254 c.sw x13,4(x12) // Acknowledge the page write.  (BUT ONLY ON x035 / v003)
-				//  otherwise c.nop
-				// 4200 c.lw x8,0(x12)  // Start checking to see when buf load is done.
-				// 8809 c.andi x8, 2    // Only look at WR_BSY (seems to be rather undocumented)
-				//  8805 c.andi x8, 1    // Only look at BSY if we're not on a v30x / v20x
-				// fc75 c.bnez x8, -4
-				// c.ebreak
-				MCFWriteReg32( dev, DMPROGBUF3, 
-					(iss->target_chip_type == CHIP_CH32X03x || iss->target_chip_type == CHIP_CH32V003) ? 
-					0x4200c254 : 0x42000001  );
+			// Different address, so we don't need to re-write all the program regs.
+			// c.lw x8,0(x10) // Get the value to write.
+			// c.lw x9,0(x11) // Get the address to write to. 
+			MCFWriteReg32( dev, DMPROGBUF0, 0x41844100 );
+			// c.sw x8,0(x9)  // Write to the address.
+			// c.addi x9, 4
+			MCFWriteReg32( dev, DMPROGBUF1, 0x0491c080 );
+			// c.sw x9,0(x11)
+			// c.nop
+			MCFWriteReg32( dev, DMPROGBUF2, 0x0001c184 );
+			// We don't shorthand the stop here, because if we are flipping beteen flash and
+			// non-flash writes, we don't want to keep messing with these registers.
+		}
 
-				MCFWriteReg32( dev, DMPROGBUF4,
-					(iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) ?
-					0xfc758809 : 0xfc758805 );
+		if( is_flash )
+		{
+			// A little weird - we need to wait until the buf load is done here to continue.
+			// x12 = 0x40022010 (FLASH_STATR)
+			//
+			// c254 c.sw x13,4(x12) // Acknowledge the page write.  (BUT ONLY ON x035 / v003)
+			//  otherwise c.nop
+			// 4200 c.lw x8,0(x12)  // Start checking to see when buf load is done.
+			// 8809 c.andi x8, 2    // Only look at WR_BSY (seems to be rather undocumented)
+			//  8805 c.andi x8, 1    // Only look at BSY if we're not on a v30x / v20x
+			// fc75 c.bnez x8, -4
+			// c.ebreak
+			MCFWriteReg32( dev, DMPROGBUF3, 
+				(iss->target_chip_type == CHIP_CH32X03x || iss->target_chip_type == CHIP_CH32V003) ? 
+				0x4200c254 : 0x42000001  );
 
-				MCFWriteReg32( dev, DMPROGBUF5, 0x90029002 );
-			}
-			else
-			{
-				MCFWriteReg32( dev, DMPROGBUF3, 0x90029002 ); // c.ebreak (nothing needs to be done if not flash)
-			}
+			MCFWriteReg32( dev, DMPROGBUF4,
+				(iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) ?
+				0xfc758809 : 0xfc758805 );
+
+			MCFWriteReg32( dev, DMPROGBUF5, 0x90029002 );
+		}
+		else
+		{
+			MCFWriteReg32( dev, DMPROGBUF3, 0x90029002 ); // c.ebreak (nothing needs to be done if not flash)
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_write );
