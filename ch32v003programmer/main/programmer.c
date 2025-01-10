@@ -78,7 +78,6 @@ void sandbox_main()
 
 	retbuffptr = retbuff;
 
-
 	memset( &state, 0, sizeof( state ) );
 	state.pinmaskD = 1<<SWIO_PIN;
 	state.pinmaskC = 1<<SWCLK_PIN;
@@ -167,12 +166,13 @@ void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
 {
 	programmer_mode = *(*liptr++);
 	// Unknown Programmer
-	*(*lretbuffptr++) = 0;
-	*(*lretbuffptr++) = programmer_mode;
+	(*lretbuffptr)[0] = 0;
+	(*lretbuffptr)[1] = programmer_mode;
+	(*lretbuffptr) += 2;
 	uprintf( "Changing programming mode to %d\n", programmer_mode );
 }
 
-int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
+int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t is_get )
 {
 	if( is_get )
 	{
@@ -203,6 +203,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 			if( cmd == 0xfe ) // We will never write to 0x7f.
 			{
 				cmd = *(iptr++);
+				//uprintf( "ACMD: %02x\n", cmd );
 
 				switch( cmd )
 				{
@@ -265,6 +266,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 					if( remain >= 5 )
 					{
 						int r = ReadWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint32_t*)&retbuffptr[1] );
+						uprintf( "READING: %08x -> %08x\n", iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), *(uint32_t*)&retbuffptr[1] );
 						iptr += 4;
 						retbuffptr[0] = r;
 						if( r < 0 )
@@ -363,6 +365,7 @@ int ch32v003_usb_feature_report( uint8_t * buffer, int reqlen, int is_get )
 				// Otherwise it's a regular command.
 				// 7-bit-cmd .. 1-bit read(0) or write(1) 
 				// if command lines up to a normal QingKeV2 debug command, treat it as that command.
+					uprintf( "Reg Operation %02x %d\n", cmd>>1, cmd & 1 );
 
 				if( cmd & 1 )
 				{

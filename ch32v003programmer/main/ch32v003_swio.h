@@ -246,7 +246,6 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 	GPIO.enable_w1ts = pinmaskC;
  	GPIO.out_w1ts = pinmaskD;
 	GPIO.enable_w1ts = pinmaskD;
-	//uprintf( "CO: (%08x=>%08x) %08x %08x %d %d\n", command, value, pinmaskD, pinmaskC, t1coeff, state->opmode );
 	if( state->opmode == 0 )
 	{
 		DisableISR();
@@ -503,7 +502,7 @@ static int DetermineChipTypeAndSectorInfo( struct SWIOState * iss )
 		uint32_t rr;
 		if( MCFReadReg32( iss, DMHARTINFO, &rr ) )
 		{
-			fprintf( stderr, "Error: Could not get hart info.\n" );
+			uprintf( "Error: Could not get hart info.\n" );
 			return -1;
 		}
 
@@ -667,19 +666,16 @@ static void ResetInternalProgrammingState( struct SWIOState * iss )
 static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t * data )
 {
 	struct SWIOState * dev = iss;
-uprintf( "READING: %08x\n", address_to_read );
+
 	int autoincrement = 1;
 	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
 		autoincrement = 0;
-
 	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval || autoincrement != iss->autoincrement )
 	{
-		uprintf( "BYP1\n" );
 		if( iss->statetag != STTAG( "RDSQ" ) || autoincrement != iss->autoincrement )
 		{
 			if( iss->statetag != STTAG( "WRSQ" ) )
 			{
-				uprintf( "BYP2\n" );
 				StaticUpdatePROGBUFRegs( dev );
 			}
 
@@ -711,7 +707,7 @@ uprintf( "READING: %08x\n", address_to_read );
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_read );
-		MCFWriteReg32( dev, DMCOMMAND, 0x0024222 ); // Only execute.
+		MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Only execute.
 
 		iss->statetag = STTAG( "RDSQ" );
 		iss->currentstateval = address_to_read;
@@ -719,13 +715,10 @@ uprintf( "READING: %08x\n", address_to_read );
 		WaitForDoneOp( dev );
 	}
 
-uprintf( "READING_O: %08x\n", address_to_read );
-
 	if( iss->autoincrement )
 		iss->currentstateval += 4;
 
 	int r = MCFReadReg32( dev, DMDATA0, data );
-uprintf( "READING_O2: %08x\n", *data );
 	return r;
 }
 
