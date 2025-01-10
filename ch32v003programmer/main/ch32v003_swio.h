@@ -665,7 +665,6 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 
 	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
 		autoincrement = 0;
-
 	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval || autoincrement != iss->autoincrement )
 	{
 		if( iss->statetag != STTAG( "RDSQ" ) || autoincrement != iss->autoincrement )

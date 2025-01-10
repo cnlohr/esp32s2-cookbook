@@ -105,16 +105,16 @@
 #define AUSB_CMD_FLASH_READ       0x12
 
 void advanced_usb_tick();
-int handle_advanced_usb_control_get( int reqlen, uint8_t * data );
-int handle_advanced_usb_terminal_get( int reqlen, uint8_t * data );
-void handle_advanced_usb_control_set( int datalen, const uint8_t * data );
+int handle_advanced_usb_control_get( uint8_t * data,  int reqlen );
+int handle_advanced_usb_terminal_get( uint8_t * data,  int reqlen );
+void handle_advanced_usb_control_set( const uint8_t * data, int datalen );
 int advanced_usb_write_log_printf(const char *fmt, va_list args);
 void advanced_usb_setup();
 int uprintf( const char * fmt, ... );
 
 struct SandboxStruct
 {	
-	int (*fnAdvancedUSB)( uint8_t * buffer, int reqlen, int is_get );
+	int16_t (*fnAdvancedUSB)( uint8_t * buffer, uint16_t reqlen, uint8_t is_get );
 	void (*fnIdle)( );
 	void (*fnDecom)( );
 };
