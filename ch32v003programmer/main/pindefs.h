@@ -3,6 +3,7 @@
 
 //#define BOARD_CNLOHR_REV3
 #define BOARD_CNLOHR
+//#define BOARD_CNLOHR
 //#define BOARD_S2MINI
 
 #if defined (BOARD_CNLOHR)

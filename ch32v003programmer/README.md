@@ -5,9 +5,15 @@ Connect SWIO (Pin D1) on CH32V003 to GPIO6 on the ESP32S2.
  * Optional Clock Synthesizer is on GPIO2 "Multi2" / "M0"
  * VCC Output on GPIO11/12 on ESP32S2.
 
+
+
 Use a DevkitC. Once programmed, see ch32v003fun for more detailed instructions.
 
-You can either use a ESP32-S2 [DevkitC](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-S2-DEVKITC-1-N8R2/16688755) or [this](https://github.com/cnlohr/cnhardware/tree/master/esp32s2-funprog)
+Tested devices are: 
+* [DevkitC](https://www.digikey.com/en/products/detail/espressif-systems/ESP32-S2-DEVKITC-1-N8R2/16688755) 
+* [this](https://github.com/cnlohr/cnhardware/tree/master/esp32s2-funprog)
+
+You can use other variants of ESP32-S2, but make sure the board you are using allows you to interface USB directly. For example if it has *CP210x USB to serial converter* (like in [this version](https://www.adafruit.com/product/4693)), it might cause issues. It can be solved by wiering USB out directly.
 
 This is the ESP32-S2 programmer for [ch32v003fun](https://github.com/cnlohr/ch32v003fun) built using [ESP-IDF](https://github.com/espressif/esp-idf.git) ~~v5.0.~~ v5.2.3
 

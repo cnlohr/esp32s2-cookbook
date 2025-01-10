@@ -246,6 +246,7 @@ static void MCFWriteReg32( struct SWIOState * state, uint8_t command, uint32_t v
 	GPIO.enable_w1ts = pinmaskC;
  	GPIO.out_w1ts = pinmaskD;
 	GPIO.enable_w1ts = pinmaskD;
+	//uprintf( "CO: (%08x=>%08x) %08x %08x %d %d\n", command, value, pinmaskD, pinmaskC, t1coeff, state->opmode );
 	if( state->opmode == 0 )
 	{
 		DisableISR();
@@ -406,7 +407,7 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 
 		if( ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ) != parity )
 		{
-			uprintf( "PARITY FAILED\n" );
+			uprintf( "Parity Failed\n" );
 			EnableISR();
 			return -1;
 		}
@@ -660,7 +661,6 @@ static void ResetInternalProgrammingState( struct SWIOState * iss )
 static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t * data )
 {
 	struct SWIOState * dev = iss;
-
 	int autoincrement = 1;
 
 	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
@@ -813,7 +813,7 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 
 	iss->currentstateval += 4;
 
-	return 0;
+	return ret;
 }
 
 static int UnlockFlash( struct SWIOState * iss )
@@ -860,7 +860,7 @@ static int EraseFlash( struct SWIOState * iss, uint32_t address, uint32_t length
 	{
 		// Whole-chip flash
 		iss->statetag = STTAG( "XXXX" );
-		printf( "Whole-chip erase\n" );
+		uprintf( "Whole-chip erase\n" );
 		WriteWord( dev, 0x40022010, 0 ); //  FLASH->CTLR = 0x40022010
 		WriteWord( dev, 0x40022010, FLASH_CTLR_MER  );
 		WriteWord( dev, 0x40022010, CR_STRT_Set|FLASH_CTLR_MER );
