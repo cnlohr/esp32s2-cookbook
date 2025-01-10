@@ -439,6 +439,8 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 static int InitializeSWDSWIO( struct SWIOState * state )
 {
 	// Careful - don't halt the part, we might just want to attach for a debug printf or something.
+	state->target_chip_type = CHIP_UNKNOWN;
+	state->sectorsize = 64;
 
 	state->opmode = 0; // Try SWIO first
 	// First try to see if there is an 003.
@@ -451,12 +453,11 @@ static int InitializeSWDSWIO( struct SWIOState * state )
 	MCFWriteReg32( state, DMCONTROL, 0x00000001 );
 
 	// See if we can see a chip here...
-	uint32_t value;
+	uint32_t value = 0;
 	int readdm = MCFReadReg32( state, DMCFGR, &value );
-	uprintf( "DMCFGR (SWD): %d: %08x\n", readdm, value );
 	if( readdm == 0 && ( value & 0xffff0000 ) == ( 0x5aa50000 ) )
 	{
-		uprintf( "TEST: Read reg passed. Check value: %08x TODO: MAKE SURE THESE MATCH\n", value );
+		uprintf( "Found RVSWIO interface.\n" );
 		return 0;
 	}
 
@@ -478,9 +479,6 @@ static int InitializeSWDSWIO( struct SWIOState * state )
 	}
 
 	// See if we can see a chip here...
-	uprintf( "DMSTATUS: %08x\n", dmstatus );
-	uprintf( "DMCONTROL: %08x\n", dmcontrol );
-
 	if( ( ( ( dmstatus >> 8 ) & 0xf ) != 0x0c &&
 		( ( dmstatus >> 8 ) & 0xf ) != 0x03 ) ||
 		dmcontrol != 1 )
@@ -527,7 +525,6 @@ static int DetermineChipTypeAndSectorInfo( struct SWIOState * iss )
 		MCFWriteReg32( iss, DMCOMMAND, 0x00220000 | 0xf12 );
 		MCFWriteReg32( iss, DMCOMMAND, 0x00220000 | 0xf12 );  // Need to double-read, not sure why.
 		MCFReadReg32( iss, DMDATA0, &marchid );
-
 
 		MCFWriteReg32( iss, DMPROGBUF0, 0x90024000 );		// c.ebreak <<== c.lw x8, 0(x8)
 		MCFWriteReg32( iss, DMDATA0, 0x1ffff704 );			// Special chip ID location.
@@ -593,7 +590,7 @@ static int WaitForFlash( struct SWIOState * iss )
 	{
 		rw = 0;
 		ReadWord( dev, 0x4002200C, &rw ); // FLASH_STATR => 0x4002200C
-	} while( (rw & 1) && timeout++ < 200);  // BSY flag.
+	} while( (rw & 1) && timeout++ < 2000);  // BSY flag.
 
 	WriteWord( dev, 0x4002200C, 0 );
 
@@ -632,25 +629,22 @@ static void StaticUpdatePROGBUFRegs( struct SWIOState * dev )
 	if( DetermineChipTypeAndSectorInfo( dev ) ) return;
 
 	MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
-	MCFWriteReg32( dev, DMDATA0, 0xe00000f4 );   // DATA0's location in memory.
+	uint32_t rr;
+	MCFReadReg32( dev, DMHARTINFO, &rr );
+	uint32_t data0offset = 0xe0000000 | ( rr & 0x7ff );
+	MCFWriteReg32( dev, DMDATA0, data0offset );   // DATA0's location in memory. (hard code to 0xe00000f4 if only working on the 003)
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100a ); // Copy data to x10
-	MCFWriteReg32( dev, DMDATA0, 0xe00000f8 );   // DATA1's location in memory.
+	MCFWriteReg32( dev, DMDATA0, data0offset + 4 );   // DATA1's location in memory. (hard code to 0xe00000f8 if only working on the 003)
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100b ); // Copy data to x11
-	MCFWriteReg32( dev, DMDATA0, 0x40022010 ); //FLASH->CTLR
+	MCFWriteReg32( dev, DMDATA0, 0x4002200c ); //FLASH->STATR (note add 4 to FLASH->CTLR)
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100c ); // Copy data to x12
 
+	// This is not even needed on the v20x/v30x chips.  But it won't harm us to set the register for simplicity.
+	// v003 requires bufload every word.
+	// x035 requires bufload every word in spite of what the datasheet says.
+	// CR_PAGE_PG = FTPG = 0x00010000 | CR_BUF_LOAD = 0x00040000
+	MCFWriteReg32( dev, DMDATA0, 0x00010000|0x00040000 );
 
-	if( dev->target_chip_type == CHIP_CH32V20x || dev->target_chip_type == CHIP_CH32V30x )
-	{
-		// This is not even needed on these chips, but we have to put something here.
-		MCFWriteReg32( dev, DMDATA0, 0x00010000 ); 
-	}
-	else
-	{
-		// v003 requires bufload every word.
-		// x035 requires bufload every word in spite of what the datasheet says.
-		MCFWriteReg32( dev, DMDATA0, 0x00010000|0x00040000); // CR_PAGE_PG = FTPG = 0x00010000 | CR_BUF_LOAD = 0x00040000
-	}
 	MCFWriteReg32( dev, DMCOMMAND, 0x0023100d ); // Copy data to x13
 }
 
@@ -668,6 +662,7 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 	struct SWIOState * dev = iss;
 
 	int autoincrement = 1;
+
 	if( address_to_read == 0x40022010 || address_to_read == 0x4002200C )  // Don't autoincrement when checking flash flag. 
 		autoincrement = 0;
 	if( iss->statetag != STTAG( "RDSQ" ) || address_to_read != iss->currentstateval || autoincrement != iss->autoincrement )
@@ -701,24 +696,25 @@ static int ReadWord( struct SWIOState * iss, uint32_t address_to_read, uint32_t 
 			// c.sw x8, 0(x11) // Write addy to DATA1
 			// c.ebreak
 			MCFWriteReg32( dev, DMPROGBUF2, 0x9002c180 );
-
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec (not autoincrement)
 			iss->autoincrement = autoincrement;
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_read );
-		MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Only execute.
+		MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Execute.
 
 		iss->statetag = STTAG( "RDSQ" );
 		iss->currentstateval = address_to_read;
-
-		WaitForDoneOp( dev );
 	}
 
 	if( iss->autoincrement )
 		iss->currentstateval += 4;
 
-	int r = MCFReadReg32( dev, DMDATA0, data );
+	// Only an issue if we are curising along very fast.
+	int r = WaitForDoneOp( dev );
+	if( r ) return r;
+
+	r = MCFReadReg32( dev, DMDATA0, data );
 	return r;
 }
 
@@ -738,38 +734,56 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 	if( iss->statetag != STTAG( "WRSQ" ) || is_flash != iss->lastwriteflags )
 	{
 		int did_disable_req = 0;
+
 		if( iss->statetag != STTAG( "WRSQ" ) )
 		{
+			MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
+			did_disable_req = 1;
+
 			if( iss->statetag != STTAG( "RDSQ" ) )
 			{
 				StaticUpdatePROGBUFRegs( dev );
 			}
 
-			MCFWriteReg32( dev, DMABSTRACTAUTO, 0x00000000 ); // Disable Autoexec.
-			did_disable_req = 1;
 			// Different address, so we don't need to re-write all the program regs.
+			// c.lw x8,0(x10) // Get the value to write.
 			// c.lw x9,0(x11) // Get the address to write to. 
+			MCFWriteReg32( dev, DMPROGBUF0, 0x41844100 );
 			// c.sw x8,0(x9)  // Write to the address.
-			MCFWriteReg32( dev, DMPROGBUF0, 0xc0804184 );
 			// c.addi x9, 4
+			MCFWriteReg32( dev, DMPROGBUF1, 0x0491c080 );
 			// c.sw x9,0(x11)
-			MCFWriteReg32( dev, DMPROGBUF1, 0xc1840491 );
+			// c.nop
+			MCFWriteReg32( dev, DMPROGBUF2, 0x0001c184 );
+			// We don't shorthand the stop here, because if we are flipping beteen flash and
+			// non-flash writes, we don't want to keep messing with these registers.
 		}
 
-		if( iss->lastwriteflags != is_flash || iss->statetag != STTAG( "WRSQ" ) )
+		if( is_flash )
 		{
-			// If we are doing flash, we have to ack, otherwise we don't want to ack.
-			if( is_flash )
-			{
-				// After writing to memory, also hit up page load flag.
-				// c.sw x13,0(x12) // Acknowledge the page write.
-				// c.ebreak
-				MCFWriteReg32( dev, DMPROGBUF2, 0x9002c214 );
-			}
-			else
-			{
-				MCFWriteReg32( dev, DMPROGBUF2, 0x00019002 ); // c.ebreak
-			}
+			// A little weird - we need to wait until the buf load is done here to continue.
+			// x12 = 0x40022010 (FLASH_STATR)
+			//
+			// c254 c.sw x13,4(x12) // Acknowledge the page write.  (BUT ONLY ON x035 / v003)
+			//  otherwise c.nop
+			// 4200 c.lw x8,0(x12)  // Start checking to see when buf load is done.
+			// 8809 c.andi x8, 2    // Only look at WR_BSY (seems to be rather undocumented)
+			//  8805 c.andi x8, 1    // Only look at BSY if we're not on a v30x / v20x
+			// fc75 c.bnez x8, -4
+			// c.ebreak
+			MCFWriteReg32( dev, DMPROGBUF3, 
+				(iss->target_chip_type == CHIP_CH32X03x || iss->target_chip_type == CHIP_CH32V003) ? 
+				0x4200c254 : 0x42000001  );
+
+			MCFWriteReg32( dev, DMPROGBUF4,
+				(iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) ?
+				0xfc758809 : 0xfc758805 );
+
+			MCFWriteReg32( dev, DMPROGBUF5, 0x90029002 );
+		}
+		else
+		{
+			MCFWriteReg32( dev, DMPROGBUF3, 0x90029002 ); // c.ebreak (nothing needs to be done if not flash)
 		}
 
 		MCFWriteReg32( dev, DMDATA1, address_to_write );
@@ -777,39 +791,25 @@ static int WriteWord( struct SWIOState * iss, uint32_t address_to_write, uint32_
 
 		if( did_disable_req )
 		{
-			MCFWriteReg32( dev, DMCOMMAND, 0x00271008 ); // Copy data to x8, and execute program.
+			MCFWriteReg32( dev, DMCOMMAND, 0x00240000 ); // Execute.
 			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
-		iss->lastwriteflags = is_flash;
 
+		iss->lastwriteflags = is_flash;
 
 		iss->statetag = STTAG( "WRSQ" );
 		iss->currentstateval = address_to_write;
-
-		if( is_flash )
-			ret |= WaitForDoneOp( dev );
 	}
 	else
 	{
 		if( address_to_write != iss->currentstateval )
 		{
-			MCFWriteReg32( dev, DMABSTRACTAUTO, 0 ); // Disable Autoexec.
 			MCFWriteReg32( dev, DMDATA1, address_to_write );
-			MCFWriteReg32( dev, DMABSTRACTAUTO, 1 ); // Enable Autoexec.
 		}
 		MCFWriteReg32( dev, DMDATA0, data );
-		if( is_flash )
-		{
-			// XXX TODO: This likely can be a very short delay.
-			// XXX POSSIBLE OPTIMIZATION REINVESTIGATE.
-			ret |= WaitForDoneOp( dev );
-		}
-		else
-		{
-			ret |= WaitForDoneOp( dev );
-		}
 	}
-
+	if( is_flash )
+		ret |= WaitForDoneOp( dev );
 
 	iss->currentstateval += 4;
 
@@ -923,13 +923,20 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 		}
 
 		is_flash = 1;
-		rw = EraseFlash( dev, address_to_write, blob_size, 0 );
-		if( rw ) return rw;
-		// 16.4.6 Main memory fast programming, Step 5
-		//if( WaitForFlash( dev ) ) return -11;
-		//WriteWord( dev, 0x40022010, FLASH_CTLR_BUF_RST );
-		//if( WaitForFlash( dev ) ) return -11;
 
+		// Only erase on first block in sector.
+		int block_in_sector = (wp & ( iss->sectorsize - 1 )) / blob_size;
+		int is_first_block = block_in_sector == 0;
+
+		if( is_first_block )
+		{
+			rw = EraseFlash( dev, address_to_write, blob_size, 0 );
+			if( rw ) return rw;
+			// 16.4.6 Main memory fast programming, Step 5
+			//if( WaitForFlash( dev ) ) return -11;
+			//WriteWord( dev, 0x40022010, FLASH_CTLR_BUF_RST );
+			//if( WaitForFlash( dev ) ) return -11;
+		}
 	}
 
 	/* General Note:
@@ -948,19 +955,20 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 
 			if( is_first_block )
 			{
-				if( dev->target_chip_type != CHIP_CH32V20x && dev->target_chip_type != CHIP_CH32V30x )
+				if( dev->target_chip_type == CHIP_CH32V20x || dev->target_chip_type == CHIP_CH32V30x )
 				{
 					// No bufrst on v20x, v30x
-					// V003, x035, maybe more.
-					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
-					WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
-				}
-				else
-				{
 					WaitForFlash( dev );
 					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
 					//FTPG ==  CR_PAGE_PG   == ((uint32_t)0x00010000)
 				}
+				else
+				{
+					// V003, x035, maybe more.
+					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
+					WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
+				}
+				WaitForFlash( dev );
 			}
 
 			int j;
@@ -975,25 +983,22 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 					memcpy( &data, &blob[index], blob_size - index );
 				}
 				WriteWord( dev, wp, data );
-				//if( (rw = WaitForFlash( dev ) ) ) return rw;
 				wp += 4;
 			}
 
-
-			if( is_last_block )
+			if( is_last_block && ( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) )
 			{
-				if( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x )
-				{
-					WriteWord( dev, 0x40022010, 1<<21 ); // Page Start
-				}
-				else
-				{
-					WriteWord( dev, 0x40022014, group );  //0x40022014 -> FLASH->ADDR
-					//if( MCF.PrepForLongOp ) MCF.PrepForLongOp( dev );  // Give the programmer a headsup this next operation could take a while.
-					WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set ); // 0x40022010 -> FLASH->CTLR
-				}
+				WriteWord( dev, 0x40022010, CR_PAGE_PG | (1<<21) ); // Page Start
+				if( WaitForFlash( dev ) ) return -13;
+			}
+			else if ( iss->target_chip_type == CHIP_CH32V003 || iss->target_chip_type == CHIP_CH32X03x )
+			{
+				// Datasheet says the x03x needs to have this called every group-of-16, but that's not true, it should be every 16-words.
 
-				if( (rw = WaitForFlash( dev ) ) ) return rw;
+				WriteWord( dev, 0x40022014, group );  //0x40022014 -> FLASH->ADDR
+				//if( MCF.PrepForLongOp ) MCF.PrepForLongOp( dev );  // Give the programmer a headsup this next operation could take a while.
+				WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set ); // 0x40022010 -> FLASH->CTLR
+				if( WaitForFlash( dev ) ) return -13;
 			}
 		}
 		else
