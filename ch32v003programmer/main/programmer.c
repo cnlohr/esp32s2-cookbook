@@ -1,3 +1,5 @@
+// For a better reference, please see the mirror of this file in rv003usb.  This file may atrophy.
+
 #include <stdio.h>
 #include <string.h>
 #include "esp_system.h"
@@ -46,6 +48,9 @@
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
 #define MAX_IN_TIMEOUT 1000
+#define R_GLITCH_HIGH
+#define RUNNING_ON_ESP32S2
+#define BB_PRINTF_DEBUG uprintf
 #include "ch32v003_swio.h"
 
 #include "updi_bitbang.h"

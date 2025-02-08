@@ -1,8 +1,8 @@
 #ifndef _PINDEFS_H
 #define _PINDEFS_H
 
-#define BOARD_CNLOHR_REV3
-//#define BOARD_CNLOHR
+//#define BOARD_CNLOHR_REV3
+#define BOARD_CNLOHR
 //#define BOARD_S2MINI
 
 #if defined (BOARD_CNLOHR)
@@ -14,8 +14,8 @@
 #define SWCLK_PIN       4
 #define SWIO_PU_PIN     9
 #define SWCLK_PU_PIN    8
-#define VDD5V_EN        12
-#define VDD3V3_EN       11
+#define VDD5V_EN_PIN    12
+#define VDD3V3_EN_PIN   11
 #define MULTI2_PIN      2
 #define MULTI1_PIN      1
 #define WSO_PIN         14
