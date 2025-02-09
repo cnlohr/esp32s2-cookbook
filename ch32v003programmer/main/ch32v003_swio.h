@@ -1019,6 +1019,7 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 }
 
 // Polls up to 7 bytes of printf, and can leave a 7-bit flag for the CH32V003.
+// -1 is an "ack" but no data was sent back, -2, -3 are special values
 static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, uint32_t leavevalA, uint32_t leavevalB )
 {
 	struct SWIOState * dev = iss;
@@ -1054,7 +1055,7 @@ static int PollTerminal( struct SWIOState * iss, uint8_t * buffer, int maxlen, u
 			if( firstrem > 3 ) firstrem = 3;
 			memcpy( buffer, ((uint8_t*)&rr)+1, firstrem );
 			buffer[num_printf_chars] = 0;
-			ret = num_printf_chars;
+			ret = (num_printf_chars>0)?num_printf_chars:(num_printf_chars-1);
 		}
 		if( leavevalA )
 		{

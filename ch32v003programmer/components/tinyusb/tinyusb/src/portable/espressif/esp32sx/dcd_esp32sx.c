@@ -41,6 +41,8 @@
 #include "soc/dport_reg.h"
 #include "soc/gpio_sig_map.h"
 #include "soc/usb_periph.h"
+#include "soc/usb_reg.h"
+#include "soc/usb_struct.h"
 
 #include "device/dcd.h"
 

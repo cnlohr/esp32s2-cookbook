@@ -172,8 +172,8 @@ void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
 {
 	programmer_mode = *(*liptr++);
 	// Unknown Programmer
-	*(*lretbuffptr++) = 0;
-	*(*lretbuffptr++) = programmer_mode;
+	*(*lretbuffptr) = 0; (*lretbuffptr)++;
+	*(*lretbuffptr) = programmer_mode; (*lretbuffptr)++;
 	uprintf( "Changing programming mode to %d\n", programmer_mode );
 }
 
