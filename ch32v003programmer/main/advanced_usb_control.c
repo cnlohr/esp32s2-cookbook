@@ -1,11 +1,11 @@
 #include "advanced_usb_control.h"
 #include "tinyusb.h"
-#include "tusb_hid_gamepad.h"
+//#include "tusb_hid_gamepad.h"
 #include <stdio.h>
 #include "esp_partition.h"
 #include "esp_attr.h"
 #include "esp_system.h"
-#include "spi_flash_mmap.h"
+//#include "spi_flash_mmap.h"
 #include "esp_log.h"
 #include "rom/cache.h"
 #include "soc/sensitive_reg.h"
@@ -14,7 +14,7 @@
 #include "soc/rtc_cntl_reg.h"
 #include "soc/soc.h"  // for WRITE_PERI_REG
 #include <esp_heap_caps.h>
-#include "esp_flash.h"
+#include <esp_flash.h>
 
 // Uncomment the ESP_LOGI to activate logging for this file.
 // Logging can cause issues in operation, so by default it should remain off.
@@ -39,7 +39,7 @@ static uint8_t did_init_flash_function;
  * @param data Pointer to a feature get request for the command set.
  * @return Number of bytes that will be returned.
  */
-int handle_advanced_usb_control_get( int reqlen, uint8_t * data )
+int handle_advanced_usb_control_get( uint8_t * data, int reqlen )
 {
 	if( advanced_usb_read_offset == 0 ) return 0;
 	memcpy( data, advanced_usb_read_offset, reqlen );
@@ -113,7 +113,7 @@ int uprintf( const char * fmt, ... )
  * @param data The data that we will write back into
  * @return size Number of bytes to be returned to the host.
  */
-int handle_advanced_usb_terminal_get( int reqlen, uint8_t * data )
+int handle_advanced_usb_terminal_get( uint8_t * data, int reqlen )
 {
 	if(NULL == advanced_usb_printf_buffer)
 	{
@@ -146,7 +146,7 @@ int handle_advanced_usb_terminal_get( int reqlen, uint8_t * data )
  * @param data Pointer to full command
  * @return A pointer to a null terminated JSON string. May be NULL if the load
  */
-void IRAM_ATTR handle_advanced_usb_control_set( int datalen, const uint8_t * data )
+void IRAM_ATTR handle_advanced_usb_control_set( const uint8_t * data, int datalen )
 {
 	if( datalen < 6 ) return;
 	intptr_t value = data[2] | ( data[3] << 8 ) | ( data[4] << 16 ) | ( data[5]<<24 );
