@@ -413,8 +413,8 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 
 		if( ReadBitRVSWD( t1coeff, pinmaskD, pinmaskC ) != parity )
 		{
-			uprintf( "Parity Failed\n" );
 			EnableISR();
+			uprintf( "Parity Failed\n" );
 			return -1;
 		}
 
