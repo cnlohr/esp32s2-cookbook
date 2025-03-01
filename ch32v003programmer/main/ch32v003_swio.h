@@ -984,11 +984,6 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 					// V003, x035, maybe more.
 					WriteWord( dev, 0x40022010, CR_PAGE_PG ); // THIS IS REQUIRED, (intptr_t)&FLASH->CTLR = 0x40022010
 					WriteWord( dev, 0x40022010, CR_BUF_RST | CR_PAGE_PG );  // (intptr_t)&FLASH->CTLR = 0x40022010
-					if( ( iss->target_chip_type & 0xf0 ) == 0x20 )
-					{
-						// This is precautionary, does not seem need to be needed
-						WaitForFlash( dev );
-					}
 				}
 				WaitForFlash( dev );
 			}
@@ -1021,11 +1016,6 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 				//if( MCF.PrepForLongOp ) MCF.PrepForLongOp( dev );  // Give the programmer a headsup this next operation could take a while.
 				WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set ); // 0x40022010 -> FLASH->CTLR
 				if( WaitForFlash( dev ) ) return -13;
-				if( ( iss->target_chip_type & 0xf0 ) == 0x20 )
-				{
-					// This is precautionary, does not seem need to be needed
-					WaitForFlash( dev );
-				}
 			}
 		}
 		else
