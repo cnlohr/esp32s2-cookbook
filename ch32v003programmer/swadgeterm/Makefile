@@ -7,7 +7,7 @@ CFLAGS:=-g -O0
 LDFLAGS:=-ludev
 CC:=gcc
 else
-CFLAGS:=-Os -s
+CFLAGS:=-Os -s -D_WIN32
 CC:=gcc
 LDFLAGS:=C:/windows/system32/setupapi.dll
 endif

@@ -169,7 +169,7 @@ void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
 	(*lretbuffptr)[0] = 0;
 	(*lretbuffptr)[1] = programmer_mode;
 	(*lretbuffptr) += 2;
-	uprintf( "Changing programming mode to %d\n", programmer_mode );
+	//uprintf( "Changing programming mode to %d\n", programmer_mode );
 }
 
 int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t is_get )
@@ -179,6 +179,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 		if( !retisready ) { buffer[0] = 0xff; return reqlen; }
 		retisready = 0;
 		int len = retbuffptr - retbuff;
+//		printf( "IRQORET: %d\n", len );
 		buffer[0] = len;
 		if( len > reqlen-1 ) len = reqlen-1;
 		memcpy( buffer+1, retbuff, len );
@@ -189,6 +190,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 	// Is send.
 	// buffer[0] is the request ID.
 	uint8_t * iptr = &buffer[1];
+//	printf( "IRQL: %d\n", reqlen );
 	while( iptr - buffer < reqlen )	
 	{
 		uint8_t cmd = *(iptr++);
@@ -226,7 +228,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					break;
 				}
 				case 0x02: // Power-down 
-					uprintf( "Power down\n" );
+					//uprintf( "Power down\n" );
 					// Make sure clock is disabled.
 					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
 					GPIO.out_w1tc = state.pinmaskD;
@@ -272,7 +274,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					if( remain >= 5 )
 					{
 						int r = ReadWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint32_t*)&retbuffptr[1] );
-						uprintf( "READING: %08x -> %08x\n", iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), *(uint32_t*)&retbuffptr[1] );
+						//uprintf( "READING: %08x -> %08x\n", iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), *(uint32_t*)&retbuffptr[1] );
 						iptr += 4;
 						retbuffptr[0] = r;
 						if( r < 0 )
@@ -371,7 +373,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 				// Otherwise it's a regular command.
 				// 7-bit-cmd .. 1-bit read(0) or write(1) 
 				// if command lines up to a normal QingKeV2 debug command, treat it as that command.
-					uprintf( "Reg Operation %02x %d\n", cmd>>1, cmd & 1 );
+				//uprintf( "Reg Operation %02x %d\n", cmd>>1, cmd & 1 );
 
 				if( cmd & 1 )
 				{
@@ -427,7 +429,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					UPDIPowerOn( pinmask, pinmaskpower );
 					uint8_t sib[17] = { 0 };
 					int r = UPDISetup( pinmask, m.freq_mhz, updi_clocks_per_bit, sib );
-					uprintf( "UPDISetup() = %d -> %s\n", r, sib );
+					//uprintf( "UPDISetup() = %d -> %s\n", r, sib );
 
 					retbuffptr[0] = r;
 					memcpy( retbuffptr + 1, sib, 17 );
@@ -461,7 +463,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					addytowrite |= (*(iptr++))<<8;
 					int r;
 					r = UPDIFlash( pinmask, updi_clocks_per_bit, addytowrite, iptr, 64, 0);
-					uprintf( "Flash Response: %d\n", r );
+					//uprintf( "Flash Response: %d\n", r );
 					iptr += 64;
 
 					*(retbuffptr++) = r;
@@ -516,6 +518,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 			break;
 		}
 	}
+	//printf( "IRQO: %d // EP: %d\n", retbuffptr - retbuff, iptr - buffer );
 
 	retisready = 1;
 

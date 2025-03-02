@@ -130,8 +130,8 @@ static const uint8_t hid_configuration_descriptor[] = {
                        false,                         // boot protocol
                        sizeof(hid_report_descriptor), // report descriptor len
                        0x81,                          // EP In address
-                       16,                            // size
-                       10),                           // polling interval
+                       64,                             // size
+                       255),                           // polling interval
 };
 
 
@@ -193,26 +193,27 @@ static fnAdvancedUsbHandler advancedUsbHandler;
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
                                hid_report_type_t report_type __attribute__((unused)), uint8_t* buffer, uint16_t reqLen)
 {
+//	printf( "tud_hid_get_report_cb %d %d\n", report_id, reqLen );
+	int ret = reqLen;
     if (report_id == 170 || report_id == 171)
     {
-        return handle_advanced_usb_control_get(buffer - 1, reqLen + 1);
+        ret = handle_advanced_usb_control_get(buffer - 1, reqLen + 1);
     }
     else if (report_id == 172)
     {
-        return handle_advanced_usb_terminal_get(buffer - 1, reqLen + 1);
+        ret = handle_advanced_usb_terminal_get(buffer - 1, reqLen + 1);
     }
     else if (report_id == 173 && advancedUsbHandler)
     {
-        return advancedUsbHandler(buffer - 1, reqLen + 1, 1);
+        ret = advancedUsbHandler(buffer - 1, reqLen + 1, 1);
     }
-    else
-    {
-        return reqLen;
-    }
+//	printf( "RET: %d\n", ret );
+	return ret;
 }
 
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type __attribute__((unused)), uint8_t const* buffer, uint16_t bufsize)
 {
+//	printf( "tud_hid_set_report_cb %d %d\n", report_id, bufsize );
     if (report_id >= 170 && report_id <= 171)
     {
         handle_advanced_usb_control_set(buffer - 1, bufsize + 1);
@@ -221,6 +222,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
     {
        advancedUsbHandler((uint8_t*)buffer - 1, bufsize + 1, 0);
     }
+//	printf( "SET DONE\n" );
 }
 
 
@@ -268,7 +270,7 @@ void app_main(void)
 
 		if (tud_ready())
 		{
-		    tud_hid_gamepad_report(HID_ITF_PROTOCOL_NONE, 0, 0, 0, 0, 0, 0, 0, 0);
+		   // tud_hid_gamepad_report(HID_ITF_PROTOCOL_NONE, 0, 0, 0, 0, 0, 0, 0, 0);
 		}
 
 
