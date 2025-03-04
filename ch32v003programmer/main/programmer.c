@@ -272,7 +272,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 				}
 				case 0x09: // Read Data32.
 				{
-					if( remain >= 5 )
+					if( remain >= 4 )
 					{
 						int r = ReadWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint32_t*)&retbuffptr[1] );
 						//uprintf( "READING: %08x -> %08x\n", iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), *(uint32_t*)&retbuffptr[1] );

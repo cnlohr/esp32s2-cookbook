@@ -624,10 +624,12 @@ static int WaitForDoneOp( struct SWIOState * iss )
 	int r;
 	uint32_t rrv;
 	int ret = 0;
+	int timeout = 1000;
 	struct SWIOState * dev = iss;
 	do
 	{
 		r = MCFReadReg32( dev, DMABSTRACTCS, &rrv );
+		if( timeout-- == 0 ) return -6;
 		if( r ) return r;
 	}
 	while( rrv & (1<<12) );
@@ -667,7 +669,7 @@ static void ResetInternalProgrammingState( struct SWIOState * iss )
 {
 	iss->statetag = 0;
 	iss->lastwriteflags = 0;
-	iss->currentstateval = 0;
+	iss->currentstateval = -1;
 	iss->flash_unlocked = 0;
 	iss->autoincrement = 0;
 }
@@ -1003,10 +1005,13 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 				wp += 4;
 			}
 
-			if( is_last_block && ( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) )
+			if( ( iss->target_chip_type == CHIP_CH32V20x || iss->target_chip_type == CHIP_CH32V30x ) )
 			{
-				WriteWord( dev, 0x40022010, CR_PAGE_PG | (1<<21) ); // Page Start
-				if( WaitForFlash( dev ) ) return -13;
+				if( is_last_block )
+				{
+					WriteWord( dev, 0x40022010, CR_PAGE_PG | (1<<21) ); // Page Start
+					if( WaitForFlash( dev ) ) return -13;
+				}
 			}
 			else
 			{
@@ -1015,7 +1020,7 @@ static int Write64Block( struct SWIOState * iss, uint32_t address_to_write, uint
 				WriteWord( dev, 0x40022014, group );  //0x40022014 -> FLASH->ADDR
 				//if( MCF.PrepForLongOp ) MCF.PrepForLongOp( dev );  // Give the programmer a headsup this next operation could take a while.
 				WriteWord( dev, 0x40022010, CR_PAGE_PG|CR_STRT_Set ); // 0x40022010 -> FLASH->CTLR
-				if( WaitForFlash( dev ) ) return -13;
+				if( WaitForFlash( dev ) ) return -16;
 			}
 		}
 		else
