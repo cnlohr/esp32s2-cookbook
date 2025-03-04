@@ -165,7 +165,7 @@ void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32
 
 void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
 {
-	programmer_mode = *(*liptr++);
+	programmer_mode = *((*liptr)++);
 	// Unknown Programmer
 	(*lretbuffptr)[0] = PROGRAMMER_PROTOCOL_NUMBER;
 	(*lretbuffptr)[1] = programmer_mode;
