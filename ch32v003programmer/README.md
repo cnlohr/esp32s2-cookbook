@@ -15,7 +15,7 @@ Tested devices are:
 
 You can use other variants of ESP32-S2, but make sure the board you are using allows you to interface USB directly. For example if it has *CP210x USB to serial converter* (like in [this version](https://www.adafruit.com/product/4693)), it might cause issues. It can be solved by wiering USB out directly.
 
-This is the ESP32-S2 programmer for [ch32v003fun](https://github.com/cnlohr/ch32v003fun) built using [ESP-IDF](https://github.com/espressif/esp-idf.git) ~~v5.0.~~ v5.2.3
+This is the ESP32-S2 programmer for [ch32v003fun](https://github.com/cnlohr/ch32v003fun) built using [ESP-IDF](https://github.com/espressif/esp-idf.git) ~~v5.0.~~ v5.2.5
 
 
 ## To just flash it without building

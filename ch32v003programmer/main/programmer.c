@@ -59,6 +59,7 @@ int retisready = 0;
 int updi_clocks_per_bit = 0;
 int programmer_mode = 0;
 
+#define PROGRAMMER_PROTOCOL_NUMBER 4
 
 struct SWIOState state;
 
@@ -166,7 +167,7 @@ void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
 {
 	programmer_mode = *(*liptr++);
 	// Unknown Programmer
-	(*lretbuffptr)[0] = 0;
+	(*lretbuffptr)[0] = PROGRAMMER_PROTOCOL_NUMBER;
 	(*lretbuffptr)[1] = programmer_mode;
 	(*lretbuffptr) += 2;
 	//uprintf( "Changing programming mode to %d\n", programmer_mode );
@@ -362,7 +363,17 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					break;
 				}
 				// Done
-
+				case 0x0f: // Override chip type, etc.
+					if( remain >= 8 )
+					{
+						state.target_chip_type = *(iptr++);
+						state.sectorsize = iptr[0] | (iptr[1]<<8);
+						iptr += 2;
+						// Rest is reserved.
+						iptr += 5;
+						*(retbuffptr++) = 0; // Reply is always 0.
+					}
+					break;
 				}
 			} else if( cmd == 0xff )
 			{
