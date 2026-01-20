@@ -467,6 +467,10 @@ static int MCFReadReg32( struct SWIOState * state, uint8_t command, uint32_t * v
 		EnableISR();
 		esp_rom_delay_us(8); // Sometimes 2 is too short.
 	}
+	else
+	{
+		return -2;
+	}
 	return 0;
 }
 
