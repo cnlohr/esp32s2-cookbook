@@ -17,7 +17,6 @@ You can use other variants of ESP32-S2, but make sure the board you are using al
 
 This is the ESP32-S2 programmer for [ch32v003fun](https://github.com/cnlohr/ch32v003fun) built using [ESP-IDF](https://github.com/espressif/esp-idf.git) ~~v5.0.~~ v5.2.5
 
-
 ## To just flash it without building
 
 ```
@@ -25,4 +24,9 @@ esptool.py -p /dev/ttyACM1 -b 460800 --before=no_reset --after=no_reset write_fl
 ```
 Or if you, like about half the programmers on this planet are struggling getting python to do the right thing, just use ESPUtil https://github.com/cpq/esputil
 
+## To debug using USB
 
+- Set ``#define DEBUG_PRINT`` to ``1`` in ``programmer_config.h``. Recompile and flash the programmer.
+- Go to ``swadgeterm`` and do ``make``. Then run it, you will see messages in the terminal when the programmer is connected and running.
+
+If you have trailing character that repeats continuously after the end of the last incoming print, change ``toprint = r - 2;`` to ``toprint = r - 3;`` in ``swadgeterm/swadgeterm.c``.

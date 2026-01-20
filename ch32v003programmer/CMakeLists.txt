@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-idf_build_set_property(COMPILE_OPTIONS "-DCFG_TUD_HID_EP_BUFSIZE=255" APPEND)
+idf_build_set_property(COMPILE_OPTIONS "-DCFG_TUD_HID_EP_BUFSIZE=512" APPEND)
 
 add_custom_target(stub_bootload
 	# If the swadge is running reboot it into the bootloader.
