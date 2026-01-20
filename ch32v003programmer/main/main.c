@@ -108,7 +108,7 @@ static const char* hid_string_descriptor[7] = {
 	(char[]){0x09, 0x04},                 // 0: is supported language is English (0x0409)
 	"CNLohr",                             // 1: Manufacturer
 	"ESP32-S2 CH32V003Programmer",        // 2: Product
-	"s2-ch32xx-pgm-v0",                   // 3: Serials, overwritten with chip ID
+	"s2-ch32xx-pgm-v5",                   // 3: Serials, overwritten with chip ID
 	"CNLohr ESP32-S2 CH32V003Programmer", // 4: HID
 
 	// Tricky keep these symbols, for sandboxing.  These are not used.  But, by keeping them here it makes them
