@@ -62,7 +62,6 @@ int ch5xx_set_clock(struct SWIOState * iss, uint32_t clock) {
 			if ((rr&0xff) != 0x48) {
 				ch5xx_write_safe(dev, 0x4000100A, 0x14, 0); // Enable PLL
 				// Set flash clock (undocumented)
-				
 				ch5xx_write_safe(dev, 0x40001807, 0x1, 0); // Flash CFG something about clock source (PLL)
 				// ch5xx_write_safe(dev, 0x40001805, 0x8, 0); // Flash SCK 50MHz - doesn't work on funprog for some reason
 				// Worked fine in minichlink with link-E
@@ -72,8 +71,7 @@ int ch5xx_set_clock(struct SWIOState * iss, uint32_t clock) {
 				// Disable watchdog
 				MCFWriteWord(dev, 0x40001000, 0x5555);
 				MCFWriteWord(dev, 0x40001004, 0x7fff);
-			} else 
-			{
+			} else {
 				return r;
 			}
 			break;
@@ -649,7 +647,7 @@ int ch5xx_write_flash_using_microblob(struct SWIOState * iss, uint32_t start_add
 		// Wait every block to be written to flash and also new address set it takes ~1.5-2ms
 		if(!(byte & 0xFF)) {
 			do {
-				if ((timer++) > 100) {
+				if ((timer++) > 200) {
 					return -2;
 				}
 				MCFReadReg32(dev, BDMDATA0, &dmdata0);
