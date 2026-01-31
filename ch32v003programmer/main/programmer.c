@@ -379,6 +379,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 					if( remain >= 8 )
 					{
 						state.target_chip_type = *(iptr++);
+						if( state.target_chip_type == CHIP_CH59x && state.t1coeff < 12 ) state.t1coeff = 12;
 						state.sectorsize = iptr[0] | (iptr[1]<<8);
 						iptr += 2;
 						// Rest is reserved.
@@ -389,6 +390,7 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 				case 0x10: //DetermineChip
 					{
 						int r = DetermineChipTypeAndSectorInfo( &state, &retbuffptr[1] );
+						if( state.target_chip_type == CHIP_CH59x && state.t1coeff < 12 ) state.t1coeff = 12;
 						retbuffptr[0] = 0xce;
 						if( r < 0 )
 							memset( &retbuffptr[1], 0, 6 );
