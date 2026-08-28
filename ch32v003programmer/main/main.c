@@ -159,11 +159,12 @@ static const tusb_desc_device_t knsDescriptor = {
 
 /// @brief PC tusb configuration
 static const tinyusb_config_t programmer_tusb_cfg = {
-	.device_descriptor        = &knsDescriptor,
-	.string_descriptor        = hid_string_descriptor,
-	.string_descriptor_count = sizeof(hid_string_descriptor)/sizeof(hid_string_descriptor[0]),
-	.external_phy             = false,
-	.configuration_descriptor = hid_configuration_descriptor,
+	.descriptor = {
+		.device            = &knsDescriptor,
+		.string            = hid_string_descriptor,
+		.string_count      = sizeof(hid_string_descriptor)/sizeof(hid_string_descriptor[0]),
+		.full_speed_config = hid_configuration_descriptor
+	}
 };
 
 #if 0
@@ -237,7 +238,7 @@ volatile void * keep_symbols[] = { 0, uprintf, vTaskDelay, ulp_riscv_halt,
 	ulp_riscv_timer_resume, ulp_riscv_timer_stop, ulp_riscv_load_binary,
 	ulp_riscv_run, ulp_riscv_config_and_run, esp_sleep_enable_timer_wakeup,
 	ulp_set_wakeup_period, rtc_gpio_init, rtc_gpio_set_direction,
-	rtc_gpio_set_level, gpio_config, gpio_matrix_out, gpio_matrix_in,
+	rtc_gpio_set_level, gpio_config, 
 	rtc_clk_cpu_freq_get_config, rtc_clk_cpu_freq_set_config_fast,
 	rtc_clk_apb_freq_get };
 

@@ -42,6 +42,9 @@
 #include "hal/clk_tree_ll.h"
 #include "pindefs.h"
 
+#include "esp_private/periph_ctrl.h"   // for the *_RCC_ATOMIC macro
+#include "hal/i2s_ll.h"                // now shipped by the esp_hal_i2s component
+
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
@@ -244,7 +247,8 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 				case 0x02: // Power-down 
 					BB_PRINTF_DEBUG( "Power down\n" );
 					// Make sure clock is disabled.
-					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
+					esp_rom_gpio_connect_out_signal(GPIO_NUM(MULTI2_PIN), 254, 1, 0);
+					//gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
 					GPIO.out_w1tc = state.pinmaskD;
 					GPIO.out_w1tc = state.pinmaskC;
 					GPIO.enable_w1ts = state.pinmaskD;
@@ -317,9 +321,15 @@ int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t 
 						gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_2 );
 
 						// Use the IO matrix to create the inverse of TX on pin 17.
-						gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
+						esp_rom_gpio_connect_out_signal(GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0);
+						//gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 
-						periph_module_enable(PERIPH_I2S0_MODULE);
+						//periph_module_enable(PERIPH_I2S0_MODULE);
+						PERIPH_RCC_ATOMIC(){
+							i2s_ll_enable_bus_clock(0, true);          // 0 = I2S port number
+							i2s_ll_reset_register(0);
+							i2s_ll_enable_core_clock(I2S_LL_GET_HW(0), true);
+						}
 
 						int use_apll = *(iptr++);  // try 1
 						int sdm0 = *(iptr++);      // try 0
@@ -674,4 +684,3 @@ struct SandboxStruct sandbox_mode =
 	.fnDecom = teardown,
 	.fnAdvancedUSB = ch32v003_usb_feature_report
 };
-
