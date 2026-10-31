@@ -27,9 +27,6 @@
 
 struct SandboxStruct * g_SandboxStruct;
 
-
-
-
 // clang-format off
 /**
  * @brief HID Gamepad Report Descriptor Template
@@ -138,7 +135,6 @@ static const uint8_t hid_configuration_descriptor[] = {
                        255),                          // polling interval
 };
 
-
 static const tusb_desc_device_t knsDescriptor = {
 	.bLength            = 18U,
 	.bDescriptorType    = 1,
@@ -155,7 +151,6 @@ static const tusb_desc_device_t knsDescriptor = {
 	.iSerialNumber      = 0x03,
 	.bNumConfigurations = 0x01,
 };
-
 
 /// @brief PC tusb configuration
 static const tinyusb_config_t programmer_tusb_cfg = {
@@ -182,13 +177,12 @@ void initTusb(const tinyusb_config_t* tusb_cfg, const uint8_t* descriptor)
 	c_descriptor = descriptor;
 	ESP_ERROR_CHECK(tinyusb_driver_install(tusb_cfg));
 }
+
 uint8_t const* tud_hid_descriptor_report_cb(uint8_t instance __attribute__((unused)))
 {
-
 	// We use only one interface and one HID report descriptor, so we can ignore parameter 'instance'
 	return c_descriptor;
 }
-
 
 typedef int16_t (*fnAdvancedUsbHandler)(uint8_t* buffer, uint16_t length, uint8_t isGet);
 
@@ -201,15 +195,15 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
 	int ret = reqLen;
 	if (report_id == 0xaa || report_id == 0xab)
 	{
-			ret = handle_advanced_usb_control_get(buffer - 1, reqLen + 1);
+		ret = handle_advanced_usb_control_get(buffer - 1, reqLen + 1);
 	}
 	else if (report_id == 0xac)
 	{
-			ret = handle_advanced_usb_terminal_get(buffer - 1, reqLen + 1);
+		ret = handle_advanced_usb_terminal_get(buffer - 1, reqLen + 1);
 	}
 	else if ((report_id == 0xad || report_id == 0xae) && advancedUsbHandler)
 	{
-			ret = advancedUsbHandler(buffer - 1, reqLen + 1, 1);
+		ret = advancedUsbHandler(buffer - 1, reqLen + 1, 1);
 	}
 	// uprintf( "RET: %d\n", ret );
 	return ret;
@@ -220,16 +214,14 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
 	// uprintf( "tud_hid_set_report_cb %02x %d\n", report_id, bufsize );
 	if (report_id >= 0xaa && report_id <= 0xab)
 	{
-			handle_advanced_usb_control_set(buffer - 1, bufsize + 1);
+		handle_advanced_usb_control_set(buffer - 1, bufsize + 1);
 	}
 	else if ((report_id == 0xad || report_id == 0xae) && advancedUsbHandler)
 	{
-			advancedUsbHandler((uint8_t*)buffer - 1, bufsize + 1, 0);
+		advancedUsbHandler((uint8_t*)buffer - 1, bufsize + 1, 0);
 	}
 	// uprintf( "SET DONE\n" );
 }
-
-
 
 void esp_sleep_enable_timer_wakeup();
 
@@ -276,8 +268,6 @@ void app_main(void)
 		{
 			// tud_hid_gamepad_report(HID_ITF_PROTOCOL_NONE, 0, 0, 0, 0, 0, 0, 0, 0);
 		}
-
-
 	} while( 1 );
 
 //	printf("Restarting now.\n");

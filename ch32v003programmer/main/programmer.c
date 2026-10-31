@@ -45,35 +45,25 @@
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
 
-#include "programmer_config.h"
+uint32_t pinmaskpower;
+uint8_t retbuff[264];
+int retisready = 0;
 
-#if DEBUG_PRINT
-#define BB_PRINTF_DEBUG(format, args...) uprintf(format, ##args)
-#else
-#define BB_PRINTF_DEBUG(format, args...)
-#endif
-
-#define MAX_IN_TIMEOUT 1000
-#include "bitbang_rvswdio.h"
-
-#include "updi_bitbang.h"
+#include "funprog_config.h"
+#include "funprog_port.h"
+#include "../ch32fun/minichlink/funprog/funprog_rvswdio.h"
+#include "bitbang_rvswdio_esp32s2.h"
 
 #if CH5xx_SUPPORT
-#include "ch5xx.h"
+#include "../ch32fun/minichlink/funprog/funprog_ch5xx.h"
 #endif
 
-const uint16_t capabilities = (PROGRAMMER_TYPE << 12) | CAPABILITIES;
+#if UPDI_SUPPORT
+#include "../ch32fun/minichlink/funprog/funprog_updi.h"
+#include "bitbang_updi_esp32s2.h"
+#endif
 
-uint32_t pinmask;
-uint32_t pinmaskpower;
-uint32_t clockpin;
-uint8_t retbuff[264];
-uint8_t * retbuffptr = 0;
-int retisready = 0;
-int updi_clocks_per_bit = 0;
-int programmer_mode = 0;
-
-struct SWIOState state;
+#include "../ch32fun/minichlink/funprog/funprog_logic.h"
 
 void sandbox_main()
 {
@@ -89,24 +79,27 @@ void sandbox_main()
 	GPIO.out_w1ts = 1<<SWCLK_PU_PIN;
 	GPIO.enable_w1ts = 1<<SWCLK_PU_PIN;
 
-	retbuffptr = retbuff;
-
 	memset( &state, 0, sizeof( state ) );
+	memset( &updi, 0, sizeof( updi ) );
 	state.pinmaskD = 1<<SWIO_PIN;
 	state.pinmaskC = 1<<SWCLK_PIN;
-	pinmask = (1<<SWIO_PIN);
+
 	pinmaskpower = (1<<VDD3V3_EN_PIN) | (1<<VDD5V_EN_PIN);
 	GPIO.out_w1ts = pinmaskpower;
 	GPIO.enable_w1ts = pinmaskpower;
-	GPIO.out_w1ts = state.pinmaskD;
-	GPIO.enable_w1ts = state.pinmaskD;
-
-	esp_rom_delay_us(5000);
 
 	rtc_cpu_freq_config_t m;
 	rtc_clk_cpu_freq_get_config( &m );
 
-	updi_clocks_per_bit = UPDIComputeClocksPerBit( m.freq_mhz, 115200 );
+#if defined(UPDI_SUPPORT) && UPDI_SUPPORT
+	updi.pinmask = ( 1<<SWIO_PIN );
+	updi.pinmaskpower = pinmaskpower;
+	GPIO.out_w1ts = state.pinmaskD;
+	GPIO.enable_w1ts = state.pinmaskD;
+	updi.clocks_per_bit = UPDIComputeClocksPerBit( m.freq_mhz, 115200 );
+#endif
+
+	esp_rom_delay_us(5000);
 
 	switch( m.freq_mhz )
 	{
@@ -117,28 +110,6 @@ void sandbox_main()
 		state.t1coeff = 100; // Untested At Other Speeds
 		break;
 	}
-
-	programmer_mode = 0;
-
-#if 0
-//	DoSongAndDanceToEnterPgmMode( t1coeff, pinmask );
-	WriteReg32( t1coeff, pinmask, 0x7e, 0x5aa50000 | (1<<10) ); // Shadow Config Reg
-	WriteReg32( t1coeff, pinmask, 0x7d, 0x5aa50000 | (1<<10) ); // CFGR (1<<10 == Allow output from slave)
-
-	uint32_t rval = 0;
-	int r = ReadReg32( t1coeff, pinmask, 0x7c, &rval ); // Capability Register (CPBR)
-	BB_PRINTF_DEBUG( "CPBR: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
-	
-	#if 0
-	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Make the debug module work properly.
-	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x80000001 ); // Initiate a halt request.
-	WriteReg32( t1coeff, pinmask, CDMCONTROL, 1 ); // Clear halt request bit.
-	WriteReg32( t1coeff, pinmask, CDMCONTROL, 0x40000001 ); // Resume
-	#endif
-	
-	r = ReadReg32( t1coeff, pinmask, 0x11, &rval ); // 
-	BB_PRINTF_DEBUG( "DMSTATUS: %d - %08x %08x\n", r, rval, REG_READ( GPIO_IN_REG ) );
-#endif
 }
 
 void teardown()
@@ -156,515 +127,23 @@ void sandbox_tick()
 	//esp_rom_delay_us(100);
 }
 
-// Configures APLL = 480 / 4 = 120
-// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
-// Datasheet recommends that numerator does not exceed 500MHz.
-void local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sdm1, uint32_t sdm2, uint32_t o_div)
-{
-	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, enable ? 0 : 1);
-	REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, enable ? 1 : 0);
-
-	if (enable) {
-		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM2, sdm2);
-		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM0, sdm0);
-		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_DSDM1, sdm1);
-		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_1);
-		REGI2C_WRITE(I2C_APLL, I2C_APLL_SDM_STOP, CLK_LL_APLL_SDM_STOP_VAL_2_REV1);
-		REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OR_OUTPUT_DIV, o_div);
-	}
-}
-
-
-void SwitchMode( uint8_t ** liptr, uint8_t ** lretbuffptr )
-{
-	programmer_mode = *((*liptr)++);
-	*((*lretbuffptr)++) = (uint8_t)PROGRAMMER_VERSION_MAJOR;
-	*((*lretbuffptr)++) = programmer_mode;
-	*((*lretbuffptr)++) = PROGRAMMER_VERSION_MINOR;
-	*((*lretbuffptr)++) = (uint8_t)(capabilities>>8);
-	*((*lretbuffptr)++) = (uint8_t)capabilities;
-	BB_PRINTF_DEBUG( "Changing programming mode to %d\n", programmer_mode );
-}
-
-int16_t ch32v003_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t is_get )
+int16_t funprog_usb_feature_report( uint8_t * buffer, uint16_t reqlen, uint8_t is_get )
 {
 	if( is_get )
 	{
 		if( !retisready ) { buffer[0] = 0xff; return reqlen; }
 		retisready = 0;
-		int len = retbuffptr - retbuff;
-		BB_PRINTF_DEBUG( "IRQORET: %d\n", len );
-		buffer[0] = len;
+		int len = retbuff[0];
+		FUN_PRINTF_DEBUG( "IRQORET: %d\n", len );
 		if( len > reqlen-1 ) len = reqlen-1;
-		memcpy( buffer+1, retbuff, len );
-		retbuffptr = retbuff;
+		memcpy( buffer, retbuff, len+1 );
 		return reqlen;
 	}
 	
 	// Is send.
 	// buffer[0] is the request ID.
-	uint8_t * iptr = &buffer[1];
-	BB_PRINTF_DEBUG( "IRQL: %d\n", reqlen );
-	while( iptr - buffer < reqlen )	
-	{
-		uint8_t cmd = *(iptr++);
-		int remain = reqlen - (iptr - buffer);
-		// Make sure there is plenty of space.
-		if( (sizeof(retbuff)-(retbuffptr - retbuff)) < 6 ) break;
-
-		BB_PRINTF_DEBUG( "CMD: %02x\n", cmd );
-
-		if( programmer_mode == 0 )
-		{
-			if( cmd == 0xfe ) // We will never write to 0x7f.
-			{
-				cmd = *(iptr++);
-				BB_PRINTF_DEBUG( "ACMD: %02x\n", cmd );
-
-				switch( cmd )
-				{
-				case 0xfd:
-					SwitchMode( &iptr, &retbuffptr );
-					break;
-				case 0x0e:
-				case 0x01:
-				{
-					//DoSongAndDanceToEnterPgmMode( &state ); was 1.  But really we just want to init.
-					// if we expect this, we can use 0x0e to get status.
-					// This was determind not to be needed.
-					REG_WRITE( IO_MUX_REG(SWCLK_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWCLK.
-					REG_WRITE( IO_MUX_REG(SWCLK_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
-					REG_WRITE( IO_MUX_REG(SWIO_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor. This is the actual SWIO.
-					REG_WRITE( IO_MUX_REG(SWIO_PU_PIN), 1<<FUN_IE_S | 1<<FUN_PU_S | 1<<FUN_DRV_S );  //SWPUC
-					int r = InitializeSWDSWIO( &state );
-					if( cmd == 0x0e )
-						*(retbuffptr++) = r;
-					break;
-				}
-				case 0x02: // Power-down 
-					BB_PRINTF_DEBUG( "Power down\n" );
-					// Make sure clock is disabled.
-					gpio_matrix_out( GPIO_NUM(MULTI2_PIN), 254, 1, 0 );
-					GPIO.out_w1tc = state.pinmaskD;
-					GPIO.out_w1tc = state.pinmaskC;
-					GPIO.enable_w1ts = state.pinmaskD;
-					GPIO.enable_w1ts = state.pinmaskC;
-					GPIO.enable_w1tc = pinmaskpower;
-					GPIO.out_w1tc = pinmaskpower;
-					break;
-				case 0x03: // Power-up
-					GPIO.out_w1ts = pinmaskpower;
-					GPIO.enable_w1ts = pinmaskpower;
-					GPIO.enable_w1ts = state.pinmaskD;
-					GPIO.enable_w1ts = state.pinmaskC;
-					GPIO.out_w1ts = state.pinmaskD;
-					//gpio_matrix_out( GPIO_NUM(SWCLK_PIN), CLK_I2S_MUX_IDX, 1, 0 );
-					break;
-				case 0x04: // Delay( uint16_t us )
-					esp_rom_delay_us(iptr[0] | (iptr[1]<<8) );
-					iptr += 2;
-					break;
-				case 0x05: // Void High Level State
-					ResetInternalProgrammingState( &state );
-					break;
-				case 0x06: // Wait-for-flash-op.
-					*(retbuffptr++) = WaitForFlash( &state );
-					break;
-				case 0x07: // Wait-for-done-op.
-					*(retbuffptr++) = WaitForDoneOp( &state );
-					break;
-				case 0x08: // Write Data32.
-				{
-					if( remain >= 9 )
-					{
-						int r = WriteWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24),  iptr[4] | (iptr[5]<<8) | (iptr[6]<<16) | (iptr[7]<<24) );
-						iptr += 8;
-						*(retbuffptr++) = r;
-					}
-					break;
-				}
-				case 0x09: // Read Data32.
-				{
-					if( remain >= 4 )
-					{
-						int r = ReadWord( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint32_t*)&retbuffptr[1] );
-						BB_PRINTF_DEBUG( "READING: %08x -> %08x\n", iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), *(uint32_t*)&retbuffptr[1] );
-						iptr += 4;
-						retbuffptr[0] = r;
-						if( r < 0 )
-							*((uint32_t*)&retbuffptr[1]) = 0;
-						retbuffptr += 5;
-					}
-					break;
-				}
-				case 0x0a:
-					ResetInternalProgrammingState( &state );
-					break;
-				case 0x0b:
-					if( remain >= 68 )
-					{
-						int r = WriteBlock( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint8_t*)&iptr[4], 64, 1 );
-						iptr += 68;
-						*(retbuffptr++) = r;
-					}
-					break;
-				case 0x0c:
-					if( remain >= 8 )
-					{
-						// Output clock on P2.
-
-						// Maximize the drive strength.
-						gpio_set_drive_capability( GPIO_NUM(MULTI2_PIN), GPIO_DRIVE_CAP_2 );
-
-						// Use the IO matrix to create the inverse of TX on pin 17.
-						gpio_matrix_out( GPIO_NUM(MULTI2_PIN), CLK_I2S_MUX_IDX, 1, 0 );
-
-						periph_module_enable(PERIPH_I2S0_MODULE);
-
-						int use_apll = *(iptr++);  // try 1
-						int sdm0 = *(iptr++);      // try 0
-						int sdm1 = *(iptr++);      // try 0
-						int sdm2 = *(iptr++);      // try 8
-						int odiv = *(iptr++);      // try 0
-						iptr +=3 ; // reserved.
-
-						local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
-
-						if( use_apll )
-						{
-							WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (1<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (2<<I2S_CLKM_DIV_NUM_S) );
-						}
-						else
-						{
-							// fI2S = fCLK / ( N + B/A )
-							// DIV_NUM = N
-							// Note I2S_CLKM_DIV_NUM minimum = 2 by datasheet.  Less than that and it will ignoreeee you.
-							WRITE_PERI_REG( I2S_CLKM_CONF_REG(0), (2<<I2S_CLK_SEL_S) | (1<<I2S_CLK_EN_S) | (0<<I2S_CLKM_DIV_A_S) | (0<<I2S_CLKM_DIV_B_S) | (1<<I2S_CLKM_DIV_NUM_S) );  // Minimum reduction, 2:1
-						}
-					}
-					break;
-				case 0x0d:  // Do a terminal log through.
-				{
-					int tries = 100;
-					if( remain >= 8 )
-					{
-						int r;
-						uint32_t leavevalA = iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24);
-						iptr += 4;
-						uint32_t leavevalB = iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24);
-						iptr += 4;
-						uint8_t * origretbuf = (retbuffptr++);
-						int canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) - 8;
-						while( canrx > 8 )
-						{
-							r = PollTerminal( &state, retbuffptr, canrx, leavevalA, leavevalB );
-							origretbuf[0] = r;
-							if( r >= 0 )
-							{
-								retbuffptr += r;
-								if( tries-- <= 0 ) break; // ran out of time?
-							}
-							else
-							{
-								break;
-							}
-							canrx = (sizeof(retbuff)-(retbuffptr - retbuff)) -8;
-							// Otherwise all is well.  If we aren't signaling try to poll for more data.
-							if( leavevalA != 0 || leavevalB != 0 ) break;
-						}
-					}
-					break;
-				}
-				case 0x0f: // Override chip type, etc.
-					if( remain >= 8 )
-					{
-						state.target_chip_type = *(iptr++);
-						if( state.target_chip_type == CHIP_CH59x && state.t1coeff < 12 ) state.t1coeff = 12;
-						state.sectorsize = iptr[0] | (iptr[1]<<8);
-						iptr += 2;
-						// Rest is reserved.
-						iptr += 5;
-						*(retbuffptr++) = 0; // Reply is always 0.
-					}
-					break;
-				case 0x10: //DetermineChip
-					{
-						int r = DetermineChipTypeAndSectorInfo( &state, &retbuffptr[1] );
-						if( state.target_chip_type == CHIP_CH59x && state.t1coeff < 12 ) state.t1coeff = 12;
-						retbuffptr[0] = 0xce;
-						if( r < 0 )
-							memset( &retbuffptr[1], 0, 6 );
-						retbuffptr += 7;
-					}
-					break;
-				// case 0x11:
-					//Set clock
-					// break;
-				case 0x12: //WriteBlock
-					if( remain >= 70 )
-					{
-						uint32_t length = iptr[4];
-						uint8_t erase = iptr[5];
-						int r = WriteBlock( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint8_t*)&iptr[6], length, erase );
-						iptr += length + 2;
-						*(retbuffptr++) = r;
-					}
-					break;
-#if CH5xx_SUPPORT
-				case 0x20: //ch5xx_write_flash
-				case 0x21:
-					if( remain >= 260 )
-					{
-						int8_t r = 0;
-						uint32_t length = iptr[4];
-						if( length == 0 ) length = 256;
-						if( cmd == 0x20 ) r = ch5xx_write_flash( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint8_t*)&iptr[5], length );
-						else r = ch5xx_write_flash_using_microblob( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), (uint8_t*)&iptr[5], length ); 
-						iptr += 260;
-						*(retbuffptr++) = r;
-					}
-					break;
-				case 0x22: // End writing
-					{
-						if( state.microblob_running > -1 ) ch5xx_microblob_end( &state );
-						if( state.writing_flash > 0 )
-						{
-							ch5xx_flash_close( &state );
-							state.writing_flash = 0;
-						}
-					}
-					break;
-#if CH5xx_EEPROM
-					case 0x23: // CH5xx read EEPROM (356 bytes)
-					if( remain >= 6 ) {
-						uint32_t length = iptr[4] | (iptr[5]<<8);
-						if( length <= (sizeof(retbuff)-(retbuffptr - retbuff) - 1) )
-						{
-							int8_t r = ch5xx_read_eeprom( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), &retbuffptr[1], length );
-							retbuffptr[0] = r;
-							if( r < 0 )
-								memset( &retbuffptr[1], 0, length );
-							retbuffptr += length + 1;
-						}
-						else
-						{
-							retbuffptr[0] = -100;
-						}
-						iptr += 8;
-					}
-					break;
-#endif
-#if CH5xx_OPTIONS
-				case 0x24: // CH5xx read Option Bytes (~148 bytes)
-					if( remain >= 6 ) {
-						uint32_t length = iptr[4] | (iptr[5]<<8);
-						if( length <= (sizeof(retbuff)-(retbuffptr - retbuff) - 1) )
-						{
-							int8_t r = ch5xx_read_options_bulk( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), &retbuffptr[1], length );
-							retbuffptr[0] = r;
-							if( r < 0 )
-								memset( &retbuffptr[1], 0, length );
-							retbuffptr += length + 1;
-						}
-						else
-						{
-							retbuffptr[0] = -100;
-						}
-						iptr += 8;
-					}
-					break;
-#endif
-				case 0x25: //CH5xx Erase
-					if( remain >= 9 )
-					{
-						int8_t r = CH5xxErase( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24), iptr[4] | (iptr[5]<<8) | (iptr[6]<<16) | (iptr[7]<<24), (enum MemoryArea)(iptr[8]));
-						iptr += 9;
-						*(retbuffptr++) = r;
-					}
-					break;
-				case 0x26: // ch5xx_read_uuid was here, maybe a place for ch5xx_verify_data
-					break;
-#if CH5xx_UNLOCK
-				case 0x27: // This also optional, (428 bytes)
-					ch570_disable_read_protection( &state );
-					break;
-#endif
-				case 0x28:
-					if( remain >= 4 )
-					{
-						int8_t r = ch5xx_set_clock( &state, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
-						iptr += 4;
-						*(retbuffptr++) = r;
-					}
-					break;
-#endif
-				// Done
-				}
-			} else if( cmd == 0xff )
-			{
-				break;
-			}
-			else
-			{
-				// Otherwise it's a regular command.
-				// 7-bit-cmd .. 1-bit read(0) or write(1) 
-				// if command lines up to a normal QingKeV2 debug command, treat it as that command.
-				// Now addresses are shifted by -1 to fit 0x7f register
-				BB_PRINTF_DEBUG( "Reg Operation %02x %d\n", cmd>>1, cmd & 1 );
-
-				if( cmd & 1 )
-				{
-					if( remain >= 4 )
-					{
-						cmd = (cmd >> 1) + 1; // Unshift from -1 to be able to read 0x7f
-						if( cmd >= DMPROGBUF0 && cmd <= DMPROGBUF7 ) state.statetag = STTAG( "XXXX" ); // Reset statetag in case we are writing to progbuf from outside
-						MCFWriteReg32( &state, cmd, iptr[0] | (iptr[1]<<8) | (iptr[2]<<16) | (iptr[3]<<24) );
-						iptr += 4;
-					}
-				}
-				else
-				{
-					if( remain >= 1 && (sizeof(retbuff)-(retbuffptr - retbuff)) >= 4 )
-					{
-						cmd = (cmd >> 1) + 1;
-						int r = MCFReadReg32( &state, cmd, (uint32_t*)&retbuffptr[1] );
-						retbuffptr[0] = r;
-						if( r < 0 )
-							memset( &retbuffptr[1], 0, 4 );
-						retbuffptr += 5;
-					}
-				}
-			}
-		}
-		else if( programmer_mode == 1 )
-		{
-			if( cmd == 0xff ) break;
-#if UPDI_SUPPORT
-			switch( cmd )
-			{
-			case 0xfe:
-			{
-				cmd = *(iptr++);
-				if( cmd == 0xfd )
-				{
-					SwitchMode( &iptr, &retbuffptr );
-				}
-				break;
-			}
-			case 0x90:
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-				rtc_cpu_freq_config_t m;
-				rtc_clk_cpu_freq_get_config( &m );
-
-				if( (sizeof(retbuff)-(retbuffptr - retbuff)) >= 18 && remain >= 2 )
-				{
-					int baudrate = *(iptr++);
-					baudrate |= (*(iptr++))<<8;
-
-					updi_clocks_per_bit = UPDIComputeClocksPerBit( m.freq_mhz, baudrate*32 );
-
-
-					UPDIPowerOn( pinmask, pinmaskpower );
-					uint8_t sib[17] = { 0 };
-					int r = UPDISetup( pinmask, m.freq_mhz, updi_clocks_per_bit, sib );
-					BB_PRINTF_DEBUG( "UPDISetup() = %d -> %s\n", r, sib );
-
-					retbuffptr[0] = r;
-					memcpy( retbuffptr + 1, sib, 17 );
-					retbuffptr += 18;
-				}
-				break;
-			}
-			case 0x91:
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-				UPDIPowerOn( pinmask, pinmaskpower );
-				break;
-			}
-			case 0x92:
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-
-				UPDIPowerOff( pinmask, pinmaskpower );
-				break;
-			}
-			case 0x93: // Flash 64-byte block.
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-
-				if( remain >= 2+64 )
-				{
-					int addytowrite = *(iptr++);
-					addytowrite |= (*(iptr++))<<8;
-					int r;
-					r = UPDIFlash( pinmask, updi_clocks_per_bit, addytowrite, iptr, 64, 0);
-					BB_PRINTF_DEBUG( "Flash Response: %d\n", r );
-					iptr += 64;
-
-					*(retbuffptr++) = r;
-				}
-				break;
-			}
-			case 0x94:
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-
-				if( remain >= 3 )
-				{
-					int addytorx = *(iptr++);
-					addytorx |= (*(iptr++))<<8;
-					int bytestorx = *(iptr++);
-
-					if( (sizeof(retbuff)-(retbuffptr - retbuff)) >= bytestorx + 1 )
-					{
-						retbuffptr[0] = UPDIReadMemoryArea( pinmask, updi_clocks_per_bit, addytorx, (uint8_t*)&retbuffptr[1], bytestorx );
-						retbuffptr += bytestorx + 1;
-					}
-				}
-				break;
-			}
-			case 0x95:
-			{
-				REG_WRITE( IO_MUX_GPIO6_REG, 1<<FUN_IE_S | 1<<FUN_DRV_S );  //Additional pull-up, 10mA drive.  Optional: 10k pull-up resistor.
-				REG_WRITE( IO_MUX_GPIO7_REG, 1<<FUN_IE_S | 3<<FUN_DRV_S );  //VCC for part 40mA drive.
-
-				*(retbuffptr++) = UPDIErase( pinmask, updi_clocks_per_bit );
-				break;
-			}
-			case 0x96:
-			{
-				*(retbuffptr++) = UPDIReset( pinmask, updi_clocks_per_bit );
-
-				break;
-			}
-			default:
-#else
-			{
-#endif
-				*(retbuffptr++) = 0xfe;
-				*(retbuffptr++) = cmd;
-				break;
-			}
-		}
-		else
-		{
-			// Unknown Programmer
-			*(retbuffptr++) = 0;
-			*(retbuffptr++) = programmer_mode;
-
-			break;
-		}
-	}
-	BB_PRINTF_DEBUG( "IRQO: %d // EP: %d\n", retbuffptr - retbuff, iptr - buffer );
-
+	HandleCommandBuffer( buffer, reqlen, retbuff, sizeof(retbuff) - 1 );
 	retisready = 1;
-
 	return 0;
 }
 
@@ -672,6 +151,5 @@ struct SandboxStruct sandbox_mode =
 {
 	.fnIdle = sandbox_tick,
 	.fnDecom = teardown,
-	.fnAdvancedUSB = ch32v003_usb_feature_report
+	.fnAdvancedUSB = funprog_usb_feature_report,
 };
-
