@@ -17,6 +17,22 @@ You can use other variants of ESP32-S2, but make sure the board you are using al
 
 This is the ESP32-S2 programmer for [ch32v003fun](https://github.com/cnlohr/ch32v003fun) built using [ESP-IDF](https://github.com/espressif/esp-idf.git) ~~v5.0.~~ v5.2.5
 
+## To build
+
+From inside this directory do:
+
+``source /path/to/espidf_5.2.5/esp-idf/export.sh``
+
+``idf.py``
+
+Press and hold BOOT button on your programmer while plugging in USB cable, quickly do:
+
+``idf.flash``
+
+Disconnect and reconnect the programmer, use it with minichlink.
+
+Or try this:
+
 ## To just flash it without building
 
 ```
