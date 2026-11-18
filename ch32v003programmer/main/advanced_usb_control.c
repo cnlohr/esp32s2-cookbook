@@ -122,7 +122,7 @@ int handle_advanced_usb_terminal_get( uint8_t * data, int reqlen )
 
 	int togo = ( advanced_usb_printf_head - advanced_usb_printf_tail + AUPB_SIZE ) % AUPB_SIZE;
 
-	data[0] = 171;
+	data[0] = SWAGTERM_REPORT_ID;
 
 	int mark = 1;
 	if( togo )

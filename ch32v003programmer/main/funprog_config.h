@@ -1,7 +1,12 @@
 #ifndef FUNPROG_CONFIG_H
 #define FUNPROG_CONFIG_H
 
-#define DEBUG_PRINT              0
+#define HW_VERSION               2
+#define ENABLE_RGB               1
+#define USE_CDC_UART             1
+#define OLD_SWD_SUPPORT          1
+
+#define DEBUG_PRINT              1
 
 #define CH5xx_SUPPORT            1
 #define CH5xx_EEPROM             1
@@ -22,7 +27,7 @@
 #define PROGRAMMER_TYPE_ESP32    4
 #define PROGRAMMER_TYPE_SWADGE   5
 
-#define PROGRAMMER_TYPE          PROGRAMMER_TYPE_SWADGE
+#define PROGRAMMER_TYPE          PROGRAMMER_TYPE_ESP32S2
 
 #define HAS_MCO_FUNCTION         (MCO_FUNCTION << 12)
 #define HAS_BLE                  (BLE_INTERFACE << 11)

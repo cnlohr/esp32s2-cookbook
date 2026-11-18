@@ -10,6 +10,7 @@
 
 #define VID 0x303a
 #define PID 0x4004
+#define SWAGTERM_REPORT_ID 0x0a
 
 #ifdef WIN32
 const int chunksize = 244;
@@ -65,7 +66,7 @@ int main( int argc, char ** argv )
 			write( 1, rdata + 2, toprint );
 		}
 		// Disable tick.
-		rdata[0] = 172;
+		rdata[0] = SWAGTERM_REPORT_ID;
 		r = hid_get_feature_report( hd, rdata, force_packet_length );
 
 		already_waiting = 0;
@@ -76,11 +77,7 @@ int main( int argc, char ** argv )
 			continue;
 		}
 
-#ifdef WIN32
 		toprint = r - 3;
-#else
-		toprint = r - 2;
-#endif
 	} while( 1 );
 
 	hid_close( hd );

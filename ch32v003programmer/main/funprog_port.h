@@ -76,4 +76,105 @@ void EnableMCO( int use_apll, int sdm0, int sdm1, int sdm2, int odiv )
 }
 #endif
 
+extern void enable_uart(uint8_t enable);
+
+static void VendorCommand( const char* buffer, int len )
+{
+	if( len > 1 && (buffer[0] == 'u' || buffer[0] == 'U') )
+	{
+		uint8_t state = 0;
+		if( buffer[1] == '0' )
+		{
+			enable_uart(0);
+			state = 0;
+		}
+		else if( buffer[1] == '1' )
+		{
+			enable_uart(1);
+			state = 1;
+		}
+		FUN_PRINTF_DEBUG("Turning UART %s\n", state?"on":"off");
+		if( buffer[0] == 'U' )
+		{
+			FUN_PRINTF_DEBUG("Storing setting to flash\n");
+			SET_UART_SETTING(state);
+			nvs_set_u8(storage, "settings", settings);
+			esp_err_t err = nvs_commit(storage);
+			if( err != ESP_OK )
+			{
+				FUN_PRINTF_DEBUG("Error (%s) saving settings to NVS!", esp_err_to_name(err));
+			}
+		};
+	}
+#if defined(ENABLE_RGB) && ENABLE_RGB
+	else if( len > 1 && (buffer[0] == 'a' || buffer[0] == 'A') )
+	{
+		uint8_t state = 0;
+		if( buffer[1] == '0' )
+		{
+			enable_animation(0);
+			state = 0;
+		}
+		else if( buffer[1] == '1' )
+		{
+			enable_animation(1);
+			state = 1;
+		}
+		FUN_PRINTF_DEBUG("Turning animation %s\n", state?"on":"off");
+		if( buffer[0] == 'A' )
+		{
+			FUN_PRINTF_DEBUG("Storing setting to flash\n");
+			SET_ANIMATION_SETTING(state);
+			nvs_set_u8(storage, "settings", settings);
+			esp_err_t err = nvs_commit(storage);
+			if( err != ESP_OK )
+			{
+				FUN_PRINTF_DEBUG("Error (%s) saving settings to NVS!", esp_err_to_name(err));
+			}
+		};
+	}
+	else if( len > 1 && (buffer[0] == 'b' || buffer[0] == 'B') )
+	{
+		char brightness_buffer[4];
+		memcpy(brightness_buffer, buffer+1, 3);
+		brightness_buffer[3] = '\0';
+		uint8_t brightness = atoi(brightness_buffer);
+		FUN_PRINTF_DEBUG("Setting max brightness to %u\n", brightness);
+		leds_set_max_brightness(brightness);
+		if( buffer[0] == 'B' )
+		{
+			FUN_PRINTF_DEBUG("Storing setting to flash\n");
+			nvs_set_u8(storage, "max_brightness", brightness);
+			esp_err_t err = nvs_commit(storage);
+			if( err != ESP_OK )
+			{
+				FUN_PRINTF_DEBUG("Error (%s) saving brightness settings to NVS!\n", esp_err_to_name(err));
+			}
+		}
+	}
+
+	if( len > 128 ) return;
+	char* char_pointer;
+	char cmd_buffer[128];
+	memcpy( cmd_buffer, buffer, len );
+	char_pointer = strtok( cmd_buffer, ":" );
+	uint8_t int_buffer[128];
+	int pos = 0;
+	while (char_pointer != NULL && pos < 128) {
+		int_buffer[pos++] = atoi(char_pointer);
+		char_pointer = strtok(NULL, ":");
+	}
+	// FUN_PRINTF_DEBUG("pos = %d, r%d g%d b%d\n", pos, int_buffer[0], int_buffer[1], int_buffer[2]);
+	if( pos == 3 )
+	{
+		leds_set_color8(int_buffer[0], int_buffer[1], int_buffer[2]);
+	}
+	else if( pos == 9 )
+	{
+		led_set_color8(0, int_buffer[0], int_buffer[1], int_buffer[2]);
+		led_set_color8(1, int_buffer[3], int_buffer[4], int_buffer[5]);
+		led_set_color8(2, int_buffer[6], int_buffer[7], int_buffer[8]);
+	}
+#endif
+}
 #endif

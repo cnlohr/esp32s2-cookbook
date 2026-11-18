@@ -40,7 +40,10 @@
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/regi2c_ctrl.h"
 #include "hal/clk_tree_ll.h"
+
 #include "pindefs.h"
+#include "rgb.h"
+#include "settings.h"
 
 #define DisableISR()            do { XTOS_SET_INTLEVEL(XCHAL_EXCM_LEVEL); portbenchmarkINTERRUPT_DISABLE(); } while (0)
 #define EnableISR()             do { portbenchmarkINTERRUPT_RESTORE(0); XTOS_SET_INTLEVEL(0); } while (0)
@@ -110,6 +113,7 @@ void sandbox_main()
 		state.t1coeff = 100; // Untested At Other Speeds
 		break;
 	}
+  uprintf("end of sandbox_main\n");
 }
 
 void teardown()

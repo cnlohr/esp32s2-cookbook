@@ -104,6 +104,9 @@
 #define AUSB_CMD_FLASH_WRITE      0x11
 #define AUSB_CMD_FLASH_READ       0x12
 
+#define SWAGTERM_REPORT_ID        0x0a
+
+
 void advanced_usb_tick();
 int handle_advanced_usb_control_get( uint8_t * data,  int reqlen );
 int handle_advanced_usb_terminal_get( uint8_t * data,  int reqlen );
