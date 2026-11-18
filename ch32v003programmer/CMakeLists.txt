@@ -19,6 +19,6 @@ add_custom_target(stub_run
 )
 
 
-project(usb_sandbox)
+project(funprog_esp32s2)
 
 
